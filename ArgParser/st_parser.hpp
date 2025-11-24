@@ -1,196 +1,38 @@
-#include <functional>
-#include <iostream>
-#include <array>
+#include "spl.hpp"
 #include <type_traits>
-#include <cstring>
-#include "iterators.hpp"
+#include <iostream>
 
 #define MAX_ARG 10
 
+
 /**
- * Parser, all of container was managed by user. (Trust me it's worth it)
+ * St_parser, all of container was managed by user. (Trust me it's worth it)
  * for seasoned user :)))
  */
 
-// Profile values was stored outside in stack
+// Profile values was stored outside. in stack
 
-class Parser;
-
-class storage_full : public std::runtime_error {
-public:
-    storage_full(const std::string& msg)
-        : std::runtime_error(msg) {}
-};
-
-class prof_restriction : public std::runtime_error {
-public:
-    prof_restriction(const std::string& msg)
-        : std::runtime_error(msg) {}
-};
-
-class token_error : public std::runtime_error {
-public:
-    token_error(const std::string& msg)
-        : std::runtime_error(msg) {}
-};
-
-
-enum add_type : u_int8_t{
-    Short = 1 << 0,
-    Long = 1 << 1,
-    LongShort = Long | Short
-};
-
-constexpr std::array<bool, 256> _make_table(){
-    std::array<bool, 256> data {};
-
-    for(int i = 0; i < 256; i++){ data[i] = false; }
-
-    for(unsigned char c = '0'; c <= '9'; c++){
-        data[c] = true;
-    }
-
-    for(unsigned char c = 'A'; c <= 'Z'; c++){
-        data[c] = true;
-    }
-
-    for(unsigned char c = 'a'; c <= 'z'; c++){
-        data[c] = true;
-    }
-
-    data['_'] = true;
-    return data;
-}
-
-constexpr std::array<bool, 256> valid_char_table = _make_table();
-
-bool valid_long_opt_name(const char* name)
-{   
-    if(name == nullptr) return false;
-    if(std::strlen(name) < 3) return false;
-    if((name[0] != '-') || (name[1] != '-')) return false;
-    name += 2;
-    while(name[0] != '\0') { 
-        if(!valid_char_table[name[0]]) return false;
-        name++;
-    }
-    return true;
-}
-
-bool valid_short_opt_name(const char* name)
-{
-    if(name == nullptr) return false;
-    if(std::strlen(name) != 2) return false;
-    return ((name[0] == '-') && ((name[1] == '_') ? false : valid_char_table[name[1]]));
-}
-
-bool valid_posarg_name(const char* name)
-{
-    if(name == nullptr) return false;
-    while(name[0] != '\0') {
-        if(!valid_char_table[name[0]]) return false;
-        name++;
-    }
-    return true;
-}
-
-struct profile
-{
-    private :
-    
-    bool is_required : 1 = false;
-    bool is_called : 1 = false;
-    iterator_array<const char*> value;
-    size_t narg;
-
-    friend class Parser;
-    
-    public :
-    
-    // Determine wether it allow parser to store more than the profile::narg or not
-    bool is_strict : 1 = false;
-    
-    /**
-     * if option was called in arg, invoke profile::callback then exit(0).
-     * this effect doesn't apply in parsing if this was assigned as posarg
-     */
-    bool is_immediate : 1 = false;
-
-    /**
-     * How many option calls are permitted,
-     * if less than 0 then it's infinite
-     */
-    int permitted_call_count = 1;
-
-    const char* lname = nullptr;
-    unsigned char sname = '\0';
-
-    
-    std::function<void()> callback;
-
-    iterator_viewer<const char*> value_viewer() const { return value.get_viewer(); }
-
-    profile() = default;
-    profile(profile&& oth) = default;
-    profile& operator=(profile&&) = default;
-
-    profile(const profile&) = delete;
-    profile& operator=(const profile&) = delete;
-
-    // Below function is just for chaining for cleaner code
-
-    profile& set_strict(bool enable = true) noexcept {
-        is_strict = enable;
-        return *this;
-    }
-
-    profile& set_imme(bool enable = true) noexcept {
-        is_immediate = enable;
-        return *this;
-    }
-
-    profile& set_lname(const char* name) noexcept {
-        lname = name;
-        return *this;
-    }
-
-    profile& set_sname(unsigned char name) noexcept {
-        sname = name;
-        return *this;
-    }
-
-    profile& set_callback(const std::function<void()>& func) {
-        callback = std::move(func);
-        return *this;
-    }
-
-    profile& call_count(int call_count){
-        permitted_call_count = call_count;
-        return *this;
-    }
-};
-
-class Parser {
+class St_parser {
     private :
     /**
      * long flag = '--'
      * short flag = '-'
      * posarg = no suffixes
      */
-    std::unordered_map<std::string_view, profile*> lookup;
+    std::unordered_map<std::string_view, st_profile*> lookup;
 
-    iterator_array<profile> options;
-    iterator_array<profile> posargs;
+    iterator_array<st_profile> options;
+    iterator_array<st_profile> posargs;
     
     /**
-     * @brief Inserting data according to profile::narg
+     * @brief Inserting data according to st_profile::narg
      * 
-     * Number of argument stored at least satisfy profile::narg.
+     * Number of argument stored at least satisfy st_profile::narg.
      * less will result in an error
      */
     void fetch_dat(
         iterator_viewer<const char*>& input_viewer,
-        profile& prof,
+        st_profile& prof,
         bool (*check_token)(const char* token) = [](const char* token){ return false; }
     ) const
     {
@@ -257,7 +99,7 @@ class Parser {
         std::cout << "Start of option parsing... \n";
         const char* token;
         
-        profile* prof = nullptr;
+        st_profile* prof = nullptr;
         while(!argv_iter.end_reached())
         {
             token = *argv_iter.get_val();
@@ -276,7 +118,7 @@ class Parser {
                 std::cout << "Identified, pointing at : " << (void*)prof << "\n";
                 if(prof->is_immediate) {
                     std::cout << "is_immediate = True, Calling function\n";
-                    prof->callback();
+                    prof->callback(*prof);
                     std::cout << "Exiting...\n";
                     std::exit(0);
                 }
@@ -322,17 +164,31 @@ class Parser {
         std::cout << "End of positional argument parsing\n";
     }
 
-    void finalize() {
-        
-        for(auto iter = options.begin(); iter < options.end_filled(); iter++){
-            if(iter->is_required && !iter->is_called) {
+    void helper__finalize1(iterator_array<st_profile>& arr)
+    {   
+        auto viewer = arr.get_viewer();
+        const st_profile* ptr = nullptr;
+
+        while(!viewer.end_reached()){
+            ptr = viewer.get_val();
+            if(ptr->is_required && !ptr->is_called) {
                 throw prof_restriction("A required option was not called");
             }
+            ++viewer;
         }
+        
+        viewer.rewind();
 
-        for(auto iter = options.begin(); iter < options.end_filled(); iter++){
-            iter->callback();
+        while(viewer.end_reached()) {
+            ptr = viewer.get_val();
+            if(ptr->is_called) ptr->callback(arr[viewer.count_iterated()]);
+            ++viewer;
         }
+    }
+
+    void finalize() {
+        helper__finalize1(options);
+        helper__finalize1(posargs);
     }
 
     public :
@@ -340,7 +196,7 @@ class Parser {
     void test_map_out() const
     {
         std::cout << "Options : ";
-        for(const profile* iter = options.begin(); iter < options.end_arr(); iter++)
+        for(const st_profile* iter = options.begin(); iter < options.end_arr(); iter++)
         {
             if(!iter->lname){
                 std::cout << "\"" << iter->sname << "\" ";
@@ -352,7 +208,7 @@ class Parser {
         std::cout << std::endl;
 
         std::cout << "Posarg : ";
-        for(const profile* iter = posargs.begin(); iter < posargs.end_arr(); iter++)
+        for(const st_profile* iter = posargs.begin(); iter < posargs.end_arr(); iter++)
         {
             if(!iter->lname){
                 std::cout << "\"" << iter->sname << "\" ";
@@ -364,12 +220,10 @@ class Parser {
         std::cout << std::endl;
     }
 
-    void set_immediate(profile& prof) const noexcept { prof.is_immediate = true; }
-
     template <size_t option_storage_size, size_t posarg_storage_size>
-    Parser(
-        std::array<profile, option_storage_size>& arr1,
-        std::array<profile, posarg_storage_size>& arr2
+    St_parser(
+        std::array<st_profile, option_storage_size>& arr1,
+        std::array<st_profile, posarg_storage_size>& arr2
     )
     {
         options.assign<option_storage_size>(arr1);
@@ -381,7 +235,7 @@ class Parser {
         return (lookup.count(name) != 0);
     }    
 
-    profile* get(const std::string_view& name) const noexcept
+    st_profile* get(const std::string_view& name) const noexcept
     {
         auto it = lookup.find(name);
         if(it == lookup.end()) return nullptr;
@@ -389,7 +243,7 @@ class Parser {
     }
 
     template <size_t storage_size>
-    profile& add_opt(
+    st_profile& add_opt(
         std::array<const char*, storage_size>& arr,
         add_type ins_type,
         bool is_required,
@@ -399,21 +253,21 @@ class Parser {
     )
     {
         
-        if(options.full()) throw storage_full("Can't add option : Parser main storage full");
+        if(options.full()) throw storage_full("Can't add option : St_parser main storage full");
         
         if(!(ins_type & (Short | Long)))
         {
             throw std::invalid_argument("Can't add option : Invalid function argument");
         }
         
-        profile p;
+        st_profile p;
         p.value.assign<storage_size>(arr);
         p.narg = expected_narg;
         p.is_required = is_required;
         
         options.push_back(std::move(p));
         
-        profile* ptr = &options[options.size() - 1];
+        st_profile* ptr = &options[options.size() - 1];
 
 
         if(ins_type & Short)
@@ -437,23 +291,23 @@ class Parser {
     }
 
     template <size_t storage_size>
-    profile& add_posarg(
+    st_profile& add_posarg(
         std::array<const char*, storage_size>& arr,
         size_t narg_expected,
         const char* name
     )
     {
-        if(posargs.full()) throw storage_full("Can't add posarg : Parser main storage full");
+        if(posargs.full()) throw storage_full("Can't add posarg : St_parser main storage full");
         if((name == nullptr) || (narg_expected == 0)) {
             throw std::invalid_argument("Can't add posarg : Invalid function argument");
         }
 
-        profile p;
+        st_profile p;
         p.value.assign(arr);
         p.is_required = true;
         p.narg = narg_expected;
         posargs.push_back(std::move(p));
-        profile* ptr = &posargs[posargs.size() - 1];
+        st_profile* ptr = &posargs[posargs.size() - 1];
 
         if(!valid_posarg_name(name)) throw std::invalid_argument(std::string("Can't add posarg : Invalid posarg name format for : ") + name);
         auto [it, is_added] = lookup.emplace(name, ptr);
@@ -485,30 +339,3 @@ class Parser {
 
 
 
-int main(int argc, char const *argv[])
-{
-    static std::array<profile, 3> options;
-    static std::array<profile, 2> posarg;
-
-    static std::array<const char*, 2> opt_val1;
-    static std::array<const char*, 2> opt_val2;
-    static std::array<const char*, 2> opt_val3;
-
-    Parser parser(options, posarg);
-    parser.add_opt<2>(opt_val1, Short, false, 2, nullptr, "-b")
-        .set_callback([](){ std::cout << "-b called !" << std::endl; })
-        .call_count(1)
-        .set_strict(false);
-
-    parser.add_opt<2>(opt_val2, Short, true, 2, nullptr, "-c")
-        .set_callback([](){ std::cout << "-c called !" << std::endl; })
-        .call_count(1)
-        .set_strict();
-
-    parser.add_opt<2>(opt_val2, Short, false, 2, nullptr, "-d")
-        .set_callback([](){ std::cout << "-d called !" << std::endl; })
-        .call_count(3)
-        .set_strict();
-
-    parser.parse(++argv, --argc);
-}
