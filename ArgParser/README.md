@@ -1,59 +1,101 @@
-# Zero-Overhead Stack Parser
+# SPL: Standard Parser Library
 
-Yes I do use AI because I'm lazy making my own docs. plus it got some "inviting-message"\
-\
-A high-performance C++ command-line argument parser designed for **embedded systems** and performance-critical applications.
+**SPL** is a lightweight, flexible, and dependency-free C++ argument parsing library. It is designed to be efficient and easy to integrate, relying solely on the C++ Standard Template Library (STL).
 
-This library adheres to a **Zero-Heap Allocation** philosophy for its internal logic. It relies entirely on **User-Managed Memory**, where the user injects pre-allocated buffers (via `std::array`) that reside in the stack or static storage.
+The library operates on a **Dual-Mode** philosophy:
 
-> **Warning:** This library is designed for **seasoned users**. You are fully responsible for the lifetime and validity of the containers you provide to the Parser.
+1.  **Dynamic Parser (`Dy_parser`):** User-friendly, automatic memory management (heap), suitable for standard desktop/server applications.
+2.  **Stack Parser (`St_parser`):** **Zero-allocation** focused, manual memory management via external stack/buffers, highly optimized for **embedded systems** or performance-critical applications.
 
-## 🌟 Key Features
+## Key Features
 
-* **No Heap Allocation:** Utilizes external `std::array` for predictable memory usage.
-* **Fluent Interface:** Configure options using intuitive method chaining (e.g., `.set_strict().set_callback(...)`).
-* **Strict & Non-Strict Parsing:** Control whether an option must strictly satisfy its `narg` count or if it can yield to subsequent options.
-* **Immediate Execution:** Support for flags like `--help` or `--version` that invoke a callback and immediately `exit(0)`.
-* **Call Counting:** Limit how many times an option can be invoked.
-* **Universal Reference Parsing:** The `parse` function accepts arguments via *perfect forwarding* for maximum flexibility.
+  * **Header-only:** No complex build systems required, simply include the headers.
+  * **Dependency-Free:** Pure C++, depends only on STL.
+  * **Positional Arguments:** Handles arguments without flags (e.g., `cp source dest`).
+  * **Flag Combinations:** Supports short flags (`-f`), long flags (`--force`), or both.
+  * **Immediate Callbacks:** Execute functions immediately upon flag detection (perfect for `--help` or `--version`).
+  * **Strict Parsing:** Full control over how many arguments a flag consumes.
+  * **Safe Iterators:** Uses custom `iterator_viewer` and `iterator_array` for safe and fast memory navigation.
+
+-----
 
 ## 📦 Installation
 
-Ensure `iterators.hpp` is available in your include path. This library is **header-only**.
+Since SPL is **header-only**, you only need to copy the header files into your project directory.
 
-```cpp
-#include "parser.hpp" // Adjust to your actual header filename
-````
+Recommended directory structure:
 
-## 🚀 Quick Start
+```text
+project/
+├── main.cpp
+└── include/
+    ├── spl/
+    │   ├── iterators.hpp
+    │   ├── spl.hpp
+    │   ├── dynamic_parser.hpp
+    │   └── stack_parser.hpp
+```
 
-Here is a basic example of how to set up storage and parse arguments:
+Ensure your compiler supports at least **C++17** (required for `std::string_view` and other modern features).
+
+```bash
+g++ main.cpp -o app -std=c++17 -I./include
+```
+
+-----
+
+## 💡 Core Concepts
+
+Before using the library, familiarize yourself with these terms:
+
+  * **Profile:** The definition of an argument (name, type, required status, etc.).
+  * **Viewer (`iterator_viewer`):** A lightweight wrapper (smart pointer-like) to view data without copying it.
+  * **Long/Short Option:**
+      * Short: Single character with a single dash (e.g., `-v`).
+      * Long: String with double dashes (e.g., `--verbose`).
+  * **PosArg (Positional Argument):** Arguments without a prefix dash where order matters.
+
+-----
+
+## ⚡ Quick Start: Dynamic Parser
+
+Use `Dy_parser` for general-purpose applications where dynamic memory allocation (heap) is acceptable. This is the easiest way to get started.
+
+### Example (`main.cpp`)
 
 ```cpp
 #include <iostream>
-#include <array>
-#include "parser.hpp"
+#include "dynamic_parser.hpp" // Ensure the path is correct
 
-int main(int argc, char const *argv[]) {
-    // 1. Prepare Storage 
-    // (Static is recommended to prevent stack overflow with large arrays and ensure lifetime)
-    static std::array<profile, 5> storage_options; // Max capacity: 5 options
-    static std::array<profile, 2> storage_posargs; // Max capacity: 2 positional args
-
-    // 2. Prepare Value Buffers for each option
-    static std::array<const char*, 2> buff_opt_b; 
-
-    // 3. Initialize Parser
-    Parser parser(storage_options, storage_posargs);
-
-    // 4. Register Options
-    parser.add_opt<2>(buff_opt_b, Short, false, 1, nullptr, "-b")
-          .set_callback([](){ std::cout << "Option -b triggered!\n"; })
-          .set_strict(true);
-
+int main(int argc, char* argv[]) {
     try {
-        // 5. Execute Parsing (Skipping argv[0])
-        parser.parse(++argv, --argc);
+        // 1. Initialize Parser
+        Dy_parser parser;
+
+        // 2. Add Option: --name or -n, requires 1 argument, mandatory
+        parser.add_opt(LongShort, true, 1, "--name", "-n")
+              .set_callback([](dy_profile& p){
+                  // Callback lambda when parsing completes for this option
+                  std::cout << "Hello, " << p.value_viewer().value() << "!\n";
+              });
+
+        // 3. Add Flag: --verbose or -v, takes 0 arguments
+        parser.add_opt(LongShort, false, 0, "--verbose", "-v")
+              .set_callback([](dy_profile& p){
+                  std::cout << "[Verbose Mode Active]\n";
+              });
+
+        // 4. Add Positional Argument (e.g., input_file)
+        parser.add_posarg(1, "input_file")
+              .set_callback([](dy_profile& p){
+                  std::cout << "Processing file: " << p.value_viewer().value() << "\n";
+              });
+
+        // 5. Execute Parsing
+        // Convert argc/argv into a vector for the library
+        std::vector<const char*> args(argv + 1, argv + argc);
+        parser.parse(args);
+
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return 1;
@@ -63,90 +105,175 @@ int main(int argc, char const *argv[]) {
 }
 ```
 
-## 📖 API Reference
+**Running the app:**
 
-### 1\. Parser Initialization
-
-The `Parser` constructor requires two `std::array` references which serve as the "backing storage" for option profiles.
-
-```cpp
-template <size_t N_OPTS, size_t N_POS>
-Parser(std::array<profile, N_OPTS>& opts, std::array<profile, N_POS>& posargs);
+```bash
+./app --name User -v data.txt
 ```
-
-### 2\. Adding Options (`add_opt`)
-
-```cpp
-template <size_t storage_size>
-profile& add_opt(
-    std::array<const char*, storage_size>& arr, // Buffer to store parsed values
-    add_type ins_type,                          // Short, Long, or LongShort
-    bool is_required,                           // Is this option mandatory?
-    size_t expected_narg,                       // Number of arguments expected
-    const char* lname,                          // Long name (e.g., "--file"), or nullptr
-    const char* sname                           // Short name (e.g., "-f"), or nullptr
-);
-```
-
-### 3\. Profile Configuration (Fluent API)
-
-The `profile` object returned by `add_opt` can be configured via method chaining:
-
-| Method | Description | Default |
-| :--- | :--- | :--- |
-| `.set_strict(bool)` | If `true`, parsing for this option stops immediately if the next token looks like another option (starts with `-`), even if `narg` isn't satisfied. | `false` |
-| `.set_imme(bool)` | If `true`, the `callback` is executed immediately upon detection, and the program calls `exit(0)`. Ideal for `--help`. | `false` |
-| `.call_count(int)` | Maximum number of times this option can be called. Use `0` to disable, or `< 0` for infinite. | `1` |
-| `.set_callback(func)` | Sets a `std::function<void()>` to be executed after parsing (or immediately if `is_immediate` is set). | - |
-
-### 4\. Adding Positional Arguments (`add_posarg`)
-
-Captures arguments that do not start with a hyphen (`-`).
-
-```cpp
-template <size_t storage_size>
-profile& add_posarg(
-    std::array<const char*, storage_size>& arr, 
-    size_t narg_expected, 
-    const char* name // Name used for error identification
-);
-```
-
-### 5\. Execution (`parse`)
-
-```cpp
-template <typename... Args>
-void parse(Args&&... args);
-```
-
-Accepts arguments via perfect forwarding. Typically takes `argv` pointer and `argc` count (or any iterator/size combination supported by the internal `iterator_viewer`).
 
 -----
 
-## ⚠️ Exception Handling
+## 🛠 Advanced: Stack Parser (Embedded Mode)
 
-The Parser throws custom exceptions inheriting from `std::runtime_error`:
+Use `St_parser` if you are working in a constrained environment or want to avoid heap allocation entirely.
 
-  * **`storage_full`**: Thrown when the main backing storage (`options` or `posargs`) is full. Increase the `std::array` size in `main`.
-  * **`prof_restriction`**: Thrown when profile rules are violated:
-      * Option called more than `permitted_call_count`.
-      * Insufficient arguments (`narg`) provided.
-      * Missing mandatory (`is_required`) option.
-  * **`token_error`**: Thrown on unknown options or invalid token sequences.
-  * **`std::overflow_error`**: If the number of arguments exceeds `MAX_ARG` (Default: 10).
+**Note:** In this mode, the **User** is responsible for providing the buffers (storage) to hold the profiles and argument values.
 
-## ⚙️ Compile-Time Configuration
+### How to use `St_parser`
 
-  * **`MAX_ARG`**: Defined as 10 by default. You can modify `#define MAX_ARG` in the header if your application requires processing more command-line arguments.
+1.  Prepare a buffer (`std::array`) to store Profiles (Option definitions).
+2.  Prepare a buffer to store the *values* of the parsed arguments.
+3.  Pass these buffers into the parser.
+
+### Example Code
+
+```cpp
+#include <iostream>
+#include "stack_parser.hpp"
+
+int main(int argc, char* argv[]) {
+    // A. Prepare Storage for Profiles (Option Definitions)
+    // Capacity: Max 5 Options and 2 Positional Arguments
+    std::array<st_profile, 5> opt_storage;
+    std::array<st_profile, 2> pos_storage;
+
+    // B. Initialize Parser with the storage
+    St_parser parser(opt_storage, pos_storage);
+
+    // C. Prepare Value Buffer
+    // This buffer will store pointers to the input strings
+    static std::array<const char*, 1> name_val_buff; 
+
+    try {
+        // D. Register Option with specific value buffer
+        parser.add_opt(
+            name_val_buff,   // Buffer to store this argument's value
+            LongShort,       // Type (Long & Short)
+            true,            // Required?
+            1,               // Number of arguments (narg)
+            "--output",      // Long Name
+            "-o"             // Short Name
+        ).set_callback([](st_profile& p){
+            std::cout << "Output set to: " << p.value_viewer().value() << "\n";
+        });
+
+        // E. Parse (using std::vector/array for input)
+        std::vector<const char*> args(argv + 1, argv + argc);
+        parser.parse(args);
+
+    } catch (const std::exception& e) {
+        std::cerr << "Parsing Error: " << e.what() << "\n";
+    }
+
+    return 0;
+}
+```
 
 -----
 
-## 💡 Usage Tips
+## ⚙️ Option Configuration
 
-1.  **Use `static`:** When declaring the storage `std::array` inside functions, always use the `static` keyword. This prevents stack overflow on large arrays and ensures the memory remains valid throughout the parser's lifetime.
-2.  **Strict Mode:** Use `.set_strict(true)` for flags or optional arguments to prevent the parser from "consuming" the next option as an argument for the current one.
+Both `st_profile` and `dy_profile` share the same chaining methods for advanced configuration:
+
+### 1\. `set_strict(bool)`
+
+Enables strict mode. If `true`, the parser stops consuming arguments for this option immediately after `narg` is satisfied.
+
+```cpp
+opt.set_strict(true);
+```
+
+### 2\. `set_imme(bool)` (Immediate)
+
+If `true`, the callback is triggered **immediately** upon finding the token, and the program exits (`exit(0)`) afterward. Highly useful for `--help` or `--version`.
+
+```cpp
+parser.add_opt(Long, false, 0, "--help", nullptr)
+      .set_imme(true)
+      .set_callback([](auto& p){
+          print_help();
+          // Library will automatically call exit(0)
+      });
+```
+
+### 3\. `call_count(int)`
+
+Limits how many times an option can be called.
+
+  * `1`: Can appear only once (Default).
+  * `N`: Can appear N times.
+  * `-1` (or \< 0): Unlimited (Can appear multiple times).
 
 <!-- end list -->
 
+```cpp
+// Example: -v -v -v (verbosity level)
+parser.add_opt(Short, false, 0, nullptr, "-v")
+      .call_count(3); // Max 3 times
 ```
+
+-----
+
+## 📚 API Reference
+
+### `enum add_type`
+
+Used in `add_opt` to define the flag type.
+
+  * `Short` (1): Short flag only (e.g., `-f`).
+  * `Long` (2): Long flag only (e.g., `--file`).
+  * `LongShort` (3): Both.
+
+### Methods `Dy_parser` & `St_parser`
+
+#### `add_opt(...)`
+
+Adds an option argument.
+
+  * **Returns:** Reference to profile (`dy_profile&` or `st_profile&`).
+  * **Params:** Flag Type, Required (bool), Nargs (int), Long Name, Short Name.
+  * *(St\_parser only)* The first parameter is the `std::array` buffer to store values.
+
+#### `add_posarg(...)`
+
+Adds a positional argument (no flag).
+
+  * **Params:** Nargs (int), Name (string identifier).
+  * *(St\_parser only)* The first parameter is the `std::array` buffer.
+
+#### `parse(Args...)`
+
+Initiates the parsing process. Accepts `std::vector`, `std::array`, or C-style array pointers compatible with `iterator_viewer`.
+
+### Helper: `iterator_viewer<T>`
+
+Utility class to access parsed data.
+
+  * `value()`: Get current element value.
+  * `get_val()`: Get pointer to element.
+  * `operator++`: Move to next element.
+  * `end_reached()`: Check if iteration is done.
+  * `rewind()`: Reset to beginning.
+
+-----
+
+## ⚠️ Error Handling
+
+The library throws exceptions inheriting from `std::runtime_error`. It is highly recommended to wrap `parser.parse()` in a `try-catch` block.
+
+| Exception Class | Description |
+| :--- | :--- |
+| **`token_error`** | Unknown token or invalid flag format (e.g., `--` without name). |
+| **`prof_restriction`** | Profile rule violation (e.g., missing required arg, insufficient args, or call count exceeded). |
+| **`storage_full`** | *(St\_parser only)* The provided buffer is full/insufficient. |
+| **`std::invalid_argument`** | Developer error during setup (e.g., illegal characters in option name). |
+
+-----
+
+### Example Error Messages
+
+```text
+Error: Permitted call count reaches 0, for : --output
+Error: Invalid number of argument passed for "-i", Needed : 2
+Error: A required option was not called
 ```

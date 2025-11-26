@@ -1,3 +1,7 @@
+
+#ifndef MIZ_ITERATORS_HPP
+#define MIZ_ITERATORS_HPP
+
 #include <stdexcept>
 #include <vector>
 
@@ -10,6 +14,12 @@ struct iterator_viewer {
 
     public : 
 
+    void transport(const iterator_viewer<T>& oth) {
+        beg = oth.beg;
+        iter = oth.iter;
+        end = oth.end;
+    }
+
     void assign(T* arr, size_t arr_size){
         beg = arr;
         iter = arr;
@@ -19,37 +29,46 @@ struct iterator_viewer {
     iterator_viewer() = default;
     iterator_viewer(const iterator_viewer<T>& oth) {
         if (this != &oth) {
-            beg  = oth.beg;
-            iter = oth.iter;
-            end  = oth.end;
+            transport(oth);
         }
     }
 
     iterator_viewer(iterator_viewer<T>&& oth){
-        beg = oth.beg;
-        iter = oth.iter;
-        end = oth.end;
+        transport(oth);
         oth.cancel();
     }
 
+    iterator_viewer(std::vector<T>& vec) { assign(vec); }
+
+    template <size_t arr_size> 
+    iterator_viewer(const std::array<T, arr_size>& arr) { assign(arr); }
+
     iterator_viewer<T>& operator=(const iterator_viewer<T>& oth){
         if (this != &oth) {
-            beg  = oth.beg;
-            iter = oth.iter;
-            end  = oth.end;
+            transport(oth);
         }
         return *this;
     }
 
     iterator_viewer<T>& operator=(iterator_viewer<T>&& oth){
-        beg = oth.beg;
-        iter = oth.iter;
-        end = oth.end;
+        transport(oth);
         oth.cancel();
+        return *this;
+    }
+
+    iterator_viewer<T>& operator=(std::vector<T>& vec) {
+        assign(vec);
+        return *this;
     }
 
     template <size_t arr_size>
-    void assign(std::array<T, arr_size>& arr){ assign(arr.data(), arr_size); }
+    iterator_viewer<T>& operator=(std::array<T, arr_size>& arr) {
+        assign<arr_size>(arr);
+        return *this;
+    }
+
+    template <size_t arr_size>
+    void assign(const std::array<T, arr_size>& arr){ assign(arr.data(), arr_size); }
     void assign(std::vector<T>& vec) { assign(vec.data(), vec.size()); }
 
     const T* get_val() const noexcept { return iter; }
@@ -171,3 +190,5 @@ struct iterator_array
         end_added = nullptr;
     }
 };
+
+#endif

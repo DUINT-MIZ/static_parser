@@ -1,3 +1,7 @@
+
+#ifndef MIZ_STACK_PARSER_HPP
+#define MIZ_STACK_PARSER_HPP
+
 #include "spl.hpp"
 #include <type_traits>
 #include <iostream>
@@ -252,7 +256,7 @@ class St_parser {
         const char* sname
     )
     {
-        
+        std::cout << "= Inserting option ="
         if(options.full()) throw storage_full("Can't add option : St_parser main storage full");
         
         if(!(ins_type & (Short | Long)))
@@ -274,8 +278,8 @@ class St_parser {
         {   
             std::cout << "inserting short" << std::endl;
             if(!valid_short_opt_name(sname)) throw std::invalid_argument(std::string("Can't add option : Invalid short option name format, for : ") + sname);            
-            auto [it, is_added] = lookup.emplace(sname, ptr);            
-            if(!is_added) throw std::invalid_argument(std::string("Can't add option : Such a short option name exist for : ") + sname);
+            auto res_pair = lookup.emplace(sname, ptr);
+            if(res_pair.second) throw std::invalid_argument(std::string("Can't add option : Such a short option name exist for : ") + sname);
             ptr->sname = sname[1];
         }
 
@@ -283,8 +287,8 @@ class St_parser {
         {
             std::cout << "inserting long" << std::endl;
             if(!valid_long_opt_name(lname)) throw std::invalid_argument(std::string("Can't add option : Invalid long option name format, for : ") + lname);
-            auto [it, is_added] = lookup.emplace(lname, ptr);
-            if(!is_added) throw std::invalid_argument(std::string("Can't add option : Such a long option name exist for : ") + lname);
+            auto res_pair = lookup.emplace(lname, ptr);
+            if(res_pair.second) throw std::invalid_argument(std::string("Can't add option : Such a long option name exist for : ") + lname);
             ptr->lname = lname;
         }
         return *ptr;
@@ -298,7 +302,7 @@ class St_parser {
     )
     {
         if(posargs.full()) throw storage_full("Can't add posarg : St_parser main storage full");
-        if((name == nullptr) || (narg_expected == 0)) {
+        if(narg_expected == 0) {
             throw std::invalid_argument("Can't add posarg : Invalid function argument");
         }
 
@@ -310,8 +314,8 @@ class St_parser {
         st_profile* ptr = &posargs[posargs.size() - 1];
 
         if(!valid_posarg_name(name)) throw std::invalid_argument(std::string("Can't add posarg : Invalid posarg name format for : ") + name);
-        auto [it, is_added] = lookup.emplace(name, ptr);
-        if(!is_added) throw std::invalid_argument(std::string("Can't add posarg : Such a name already exist for : ") + name);
+        auto res_pair = lookup.emplace(name, ptr);
+        if(res_pair.second) throw std::invalid_argument(std::string("Can't add posarg : Such a name already exist for : ") + name);
         ptr->lname = name;
         return *ptr;
     }
@@ -337,5 +341,5 @@ class St_parser {
     }
 };
 
-
+#endif
 

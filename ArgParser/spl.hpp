@@ -4,9 +4,9 @@
  * Library for all parser-specifics definitions and functions
  */
 
-#ifndef ADIS7i_ARGPARSER_SPL
+#ifndef MIZ_STANDARD_PARSER_LIBRARY
 
-#define ADIS7i_ARGPARSER_SPL
+#define MIZ_STANDARD_PARSER_LIBRARY
 
 #include <stdexcept>
 #include <array>
@@ -125,45 +125,10 @@ struct profile
 
     /*
     While in dynamic parser. it's very unlikely to be a valid ptr
-    but generally it's not needed. in parser, but rather user define function
+    but it's entirely not needed in parser, but more-likely to user define function
     */
     const char* lname = nullptr;
     unsigned char sname = '\0';
-
-    
-    std::function<void(profile&)> callback;
-
-    // Below function is just for chaining for cleaner code
-
-    profile& set_strict(bool enable = true) noexcept {
-        is_strict = enable;
-        return *this;
-    }
-
-    profile& set_imme(bool enable = true) noexcept {
-        is_immediate = enable;
-        return *this;
-    }
-
-    profile& set_lname(const char* name) noexcept {
-        lname = name;
-        return *this;
-    }
-
-    profile& set_sname(unsigned char name) noexcept {
-        sname = name;
-        return *this;
-    }
-
-    profile& set_callback(const std::function<void(profile&)>& func) {
-        callback = std::move(func);
-        return *this;
-    }
-
-    profile& call_count(int call_count){
-        permitted_call_count = call_count;
-        return *this;
-    }
 };
 
 struct st_profile : public profile {
@@ -173,6 +138,12 @@ struct st_profile : public profile {
     public :
 
     iterator_viewer<const char*> value_viewer() const { return value.get_viewer(); }
+    std::function<void(st_profile&)> callback;
+    
+    st_profile& set_callback(const std::function<void(st_profile&)>& func) {
+        callback = std::move(func);
+        return *this;
+    }
 
     st_profile() = default;
     st_profile(st_profile&& oth) = default;
@@ -180,6 +151,33 @@ struct st_profile : public profile {
 
     st_profile(const st_profile&) = delete;
     st_profile& operator=(const st_profile&) = delete;
+
+    // Below function is just for chaining for cleaner code
+
+    st_profile& set_strict(bool enable = true) noexcept {
+        is_strict = enable;
+        return *this;
+    }
+
+    st_profile& set_imme(bool enable = true) noexcept {
+        is_immediate = enable;
+        return *this;
+    }
+
+    st_profile& set_lname(const char* name) noexcept {
+        lname = name;
+        return *this;
+    }
+
+    st_profile& set_sname(unsigned char name) noexcept {
+        sname = name;
+        return *this;
+    }
+
+    st_profile& call_count(int call_count){
+        permitted_call_count = call_count;
+        return *this;
+    }
 };
 
 struct dy_profile : public profile {
@@ -194,13 +192,51 @@ struct dy_profile : public profile {
         return res;
     }
 
+    dy_profile& reserve(size_t size) {
+        values.reserve(size);
+        return *this;
+    }
+
+    std::function<void(dy_profile&)> callback;
+    dy_profile& set_callback(const std::function<void(dy_profile&)>& func) {
+        callback = std::move(func);
+        return *this;
+    }
+
     dy_profile() = default;
     dy_profile(dy_profile&& oth) = default;
     dy_profile& operator=(dy_profile&&) = default;
 
     dy_profile(const dy_profile&) = delete;
     dy_profile& operator=(const dy_profile&) = delete;
-    // st_profile
+    // dy_profile
+
+    // Below function is just for chaining for cleaner code
+
+    dy_profile& set_strict(bool enable = true) noexcept {
+        is_strict = enable;
+        return *this;
+    }
+
+    dy_profile& set_imme(bool enable = true) noexcept {
+        is_immediate = enable;
+        return *this;
+    }
+
+    dy_profile& set_lname(const char* name) noexcept {
+        lname = name;
+        return *this;
+    }
+
+    dy_profile& set_sname(unsigned char name) noexcept {
+        sname = name;
+        return *this;
+    }
+
+    dy_profile& call_count(int call_count){
+        permitted_call_count = call_count;
+        return *this;
+    }
 };
 
 
