@@ -2,7 +2,7 @@
 #ifndef MIZ_STACK_PARSER_HPP
 #define MIZ_STACK_PARSER_HPP
 
-#include "spl.hpp"
+#include "pssl.hpp"
 #include <type_traits>
 #include <iostream>
 
@@ -92,7 +92,6 @@ class St_parser {
         }
         prof.is_called = true;
         --prof.permitted_call_count;
-        test_map_st_prof(prof);
         std::cout << "Fetching value ended. \n";
     }
 
@@ -187,7 +186,6 @@ class St_parser {
 
         while(!viewer.end_reached()) {
             ptr = viewer.get_val();
-            test_map_st_prof(*ptr);
             if(ptr->is_called) ptr->callback(arr[viewer.count_iterated()]);
             ++viewer;
         }
@@ -198,8 +196,22 @@ class St_parser {
         helper__finalize1(posargs);
     }
 
-    public :
+    void helper_help1(iterator_array<st_profile>& arr) {
+        for(auto& opt : arr) {
+            std::cout << "[" << (opt.is_required ? '!' : '*') << "] ";
+            std::cout << "<" << (opt.narg) << "> ";
+            if(opt.sname) {
+                std::cout << "-" << opt.sname << ", ";
+            }
+            if(opt.lname) {
+                std::cout << opt.lname;
+            }
+            std::cout << "\n" << opt.desc << "\n";
+        }
+    }
 
+    public :
+    /*
     void test_map_st_prof(const st_profile& prof) const {
         std::cout << "= Profile Mapper =\n";
         std::cout << "MAX call : " << prof.permitted_call_count << "\n";
@@ -211,11 +223,20 @@ class St_parser {
         else std::cout << "Name : " << prof.sname << "\n";
         std::cout << "<--->" << std::endl;
     }
+    */
+
+    void help() {
+        std::cout << "Options : \n";
+        helper_help1(options);
+        std::cout << "\nPosargs : \n";
+        helper_help1(posargs);
+        std::cout << std::endl;
+    }
 
     void test_map_out() const
     {
         std::cout << "Options : ";
-        for(const st_profile* iter = options.begin(); iter < options.end_arr(); iter++)
+        for(const st_profile* iter = options.begin_arr(); iter < options.end_arr(); iter++)
         {
             if(!iter->lname){
                 std::cout << "\"" << iter->sname << "\" ";
@@ -227,7 +248,7 @@ class St_parser {
         std::cout << std::endl;
 
         std::cout << "Posarg : ";
-        for(const st_profile* iter = posargs.begin(); iter < posargs.end_arr(); iter++)
+        for(const st_profile* iter = posargs.begin_arr(); iter < posargs.end_arr(); iter++)
         {
             if(!iter->lname){
                 std::cout << "\"" << iter->sname << "\" ";

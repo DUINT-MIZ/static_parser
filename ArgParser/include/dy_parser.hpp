@@ -1,7 +1,7 @@
 #ifndef MIZ_DYNAMIC_PARSER_HPP
 #define MIZ_DYNAMIC_PARSER_HPP
 
-#include "spl.hpp"
+#include "pssl.hpp"
 #include <unordered_map>
 #include <vector>
 #include <iostream>
@@ -22,7 +22,7 @@ class Dy_parser {
     std::cout << "Fetching Value started...\n";
         if(prof.permitted_call_count == 0) {
             std::string error_msg = "Permitted call count reaches 0, for : ";
-            if(prof.lname) {
+            if(!prof.lname.empty()) {
                 error_msg += prof.lname;
             } else {
                 error_msg.append(1, prof.sname);
@@ -54,7 +54,7 @@ class Dy_parser {
         if((signed)narg_to_parse > 0)
         {
             std::string error_msg = "Invalid number of argument passed for \"";
-            if(prof.lname)
+            if(!prof.lname.empty())
             {
                 error_msg += prof.lname;
             } else {

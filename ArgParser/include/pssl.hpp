@@ -1,19 +1,19 @@
 /**
- * Standard Parser Library
+ * Parser standard support library
  * 
  * Library for all parser-specifics definitions and functions
  */
 
-#ifndef MIZ_STANDARD_PARSER_LIBRARY
+#ifndef MIZ_PARSER_STANDARD_SUPPORT_LIBRARY
 
-#define MIZ_STANDARD_PARSER_LIBRARY
+#define MIZ_PARSER_STANDARD_SUPPORT_LIBRARY
 
 #include <stdexcept>
 #include <array>
 #include <cstdlib>
 #include <cstring>
 #include <functional>
-#include "iterators.hpp"
+#include <common_ssl/iterators.hpp>
 
 class St_parser;
 class Dy_parser;
@@ -122,20 +122,18 @@ struct profile
      * if less than 0 then it's infinite
      */
     int permitted_call_count = 1;
-
-    /*
-    While in dynamic parser. it's very unlikely to be a valid ptr
-    but it's entirely not needed in parser, but more-likely to user define function
-    */
-    const char* lname = nullptr;
-    unsigned char sname = '\0';
 };
 
 struct st_profile : public profile {
     private :
+    const char* lname = nullptr;
+    unsigned char sname = '\0';
+
     iterator_array<const char*> value;
     friend class St_parser;
     public :
+
+    const char* desc;
 
     iterator_viewer<const char*> value_viewer() const { return value.get_viewer(); }
     std::function<void(st_profile&)> callback = [](st_profile& _){};
@@ -178,10 +176,14 @@ struct st_profile : public profile {
         permitted_call_count = call_count;
         return *this;
     }
+
+    st_profile& set_desc(const char* new_desc) noexcept { desc = new_desc; }
 };
 
 struct dy_profile : public profile {
     private :
+    std::string lname = "";
+    unsigned char sname = '\0';
     std::vector<const char*> values;
     friend class Dy_parser;
     public :
