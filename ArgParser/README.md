@@ -1,5 +1,7 @@
 # SPL: Standard Parser Library
 
+Hobby project of mine
+
 **SPL** is a lightweight, flexible, and dependency-free C++ argument parsing library. It is designed to be efficient and easy to integrate, relying solely on the C++ Standard Template Library (STL).
 
 The library operates on a **Dual-Mode** philosophy:
