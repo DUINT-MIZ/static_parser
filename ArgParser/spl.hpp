@@ -138,7 +138,7 @@ struct st_profile : public profile {
     public :
 
     iterator_viewer<const char*> value_viewer() const { return value.get_viewer(); }
-    std::function<void(st_profile&)> callback;
+    std::function<void(st_profile&)> callback = [](st_profile& _){};
     
     st_profile& set_callback(const std::function<void(st_profile&)>& func) {
         callback = std::move(func);
@@ -197,7 +197,7 @@ struct dy_profile : public profile {
         return *this;
     }
 
-    std::function<void(dy_profile&)> callback;
+    std::function<void(dy_profile&)> callback = [](dy_profile& _){};
     dy_profile& set_callback(const std::function<void(dy_profile&)>& func) {
         callback = std::move(func);
         return *this;

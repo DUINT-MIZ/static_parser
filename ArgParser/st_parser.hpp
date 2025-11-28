@@ -92,6 +92,7 @@ class St_parser {
         }
         prof.is_called = true;
         --prof.permitted_call_count;
+        test_map_st_prof(prof);
         std::cout << "Fetching value ended. \n";
     }
 
@@ -128,6 +129,7 @@ class St_parser {
                 }
                 ++argv_iter;
                 fetch_dat(argv_iter, *prof, [](const char* token){ return (token[0] == '-'); });
+                prof->is_called = true;
             }
             else 
             {
@@ -183,8 +185,9 @@ class St_parser {
         
         viewer.rewind();
 
-        while(viewer.end_reached()) {
+        while(!viewer.end_reached()) {
             ptr = viewer.get_val();
+            test_map_st_prof(*ptr);
             if(ptr->is_called) ptr->callback(arr[viewer.count_iterated()]);
             ++viewer;
         }
@@ -196,6 +199,18 @@ class St_parser {
     }
 
     public :
+
+    void test_map_st_prof(const st_profile& prof) const {
+        std::cout << "= Profile Mapper =\n";
+        std::cout << "MAX call : " << prof.permitted_call_count << "\n";
+        std::cout << "Required ? : " << std::boolalpha << prof.is_required << "\n";
+        std::cout << "Called ? : " << std::boolalpha << prof.is_called << "\n";
+        std::cout << "Immediate ? : " << std::boolalpha << prof.is_immediate << "\n";
+        std::cout << "Narg : " << prof.narg << "\n";
+        if(prof.lname) std::cout << "Name : " << prof.lname << "\n";
+        else std::cout << "Name : " << prof.sname << "\n";
+        std::cout << "<--->" << std::endl;
+    }
 
     void test_map_out() const
     {
@@ -256,7 +271,7 @@ class St_parser {
         const char* sname
     )
     {
-        std::cout << "= Inserting option ="
+        std::cout << "= Inserting option =\n";
         if(options.full()) throw storage_full("Can't add option : St_parser main storage full");
         
         if(!(ins_type & (Short | Long)))
@@ -279,7 +294,7 @@ class St_parser {
             std::cout << "inserting short" << std::endl;
             if(!valid_short_opt_name(sname)) throw std::invalid_argument(std::string("Can't add option : Invalid short option name format, for : ") + sname);            
             auto res_pair = lookup.emplace(sname, ptr);
-            if(res_pair.second) throw std::invalid_argument(std::string("Can't add option : Such a short option name exist for : ") + sname);
+            if(!res_pair.second) throw std::invalid_argument(std::string("Can't add option : Such a short option name exist for : ") + sname);
             ptr->sname = sname[1];
         }
 
@@ -288,7 +303,7 @@ class St_parser {
             std::cout << "inserting long" << std::endl;
             if(!valid_long_opt_name(lname)) throw std::invalid_argument(std::string("Can't add option : Invalid long option name format, for : ") + lname);
             auto res_pair = lookup.emplace(lname, ptr);
-            if(res_pair.second) throw std::invalid_argument(std::string("Can't add option : Such a long option name exist for : ") + lname);
+            if(!res_pair.second) throw std::invalid_argument(std::string("Can't add option : Such a long option name exist for : ") + lname);
             ptr->lname = lname;
         }
         return *ptr;
@@ -315,7 +330,7 @@ class St_parser {
 
         if(!valid_posarg_name(name)) throw std::invalid_argument(std::string("Can't add posarg : Invalid posarg name format for : ") + name);
         auto res_pair = lookup.emplace(name, ptr);
-        if(res_pair.second) throw std::invalid_argument(std::string("Can't add posarg : Such a name already exist for : ") + name);
+        if(!res_pair.second) throw std::invalid_argument(std::string("Can't add posarg : Such a name already exist for : ") + name);
         ptr->lname = name;
         return *ptr;
     }
