@@ -143,14 +143,12 @@ struct iterator_array
 
     // Default constructor
     iterator_array() = default;
-
+    
     void assign(T* arr, size_t size) noexcept
-    {
+    {   
         beg = arr;
         end_added = arr;
         end_allocated = arr + size;
-        
-        
     }
 
     void assign(T* arr, size_t size, size_t many_were_added)
@@ -272,7 +270,7 @@ struct iterator_array
     };
 
     iterator begin() noexcept { return iterator(beg); }
-    iterator end() const noexcept { return iterator(end_allocated); }
+    iterator end() const noexcept { return iterator(end_added); }
 };
 
 #endif

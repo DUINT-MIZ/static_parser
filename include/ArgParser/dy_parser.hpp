@@ -14,6 +14,18 @@ class Dy_parser {
     std::unordered_map<std::string, dy_profile*> lookup;
     std::list<dy_profile> options;
     std::list<dy_profile> posargs;
+
+    /*
+    Fetching token onto prof.values
+
+    Throws error if :
+    - permitted_call_count reaches 0
+    - Total token fetched doesn't met prof.narg
+
+    Stops parsing if :
+    - is_strict true and token fetched met prof.narg
+    - reaches end of token array
+    */  
     void fetch_dat(
         iterator_viewer<const char*>& input_viewer,
         dy_profile& prof,
@@ -69,6 +81,10 @@ class Dy_parser {
         std::cout << "Fetching value ended. \n";
     }
 
+    /*
+    Parses all of the flags. 
+    Throws all of unknown token to dump
+    */
     void parse_opt(
         iterator_viewer<const char*>& argv_iter,
         std::vector<const char*>& dump
@@ -113,6 +129,10 @@ class Dy_parser {
         std::cout << "End of option parsing..\n";
     }
 
+    /*
+    Parses all of the positional arguments.
+    takes array of token from dump.
+    */
     void parse_posarg(std::vector<const char*>& dump)
     {   
         std::cout << "Start Parsing positional arguments..\n";
@@ -135,7 +155,6 @@ class Dy_parser {
 
     void helper__finalize1(std::list<dy_profile>& arr)
     {   
-        
         for(auto& obj : arr) {
             if(obj.is_required && !obj.is_called) {
                 throw prof_restriction("A required option was not called");
@@ -147,6 +166,10 @@ class Dy_parser {
         }
     }
 
+    /*
+    Verify all of required option & posarg.
+    and call it's callback if prof.is_called = true;
+    */
     void finalize() {
         helper__finalize1(options);
         helper__finalize1(posargs);

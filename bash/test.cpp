@@ -3,7 +3,7 @@
 #include <termios.h>
 #include <cstring>
 #include <iostream>
-#include "ArgParser/iterators.hpp"
+#include <ArgParser/dy_parser.hpp>
 
 static constexpr size_t buff_size = 1024;
 
@@ -63,7 +63,7 @@ int main()
             write(STDOUT_FILENO, &c, 1);
             buff.push_back('\0');
             map_iter_array<char>(buff);
-            if(std::strcmp(buff.begin(), "exit") == 0) {
+            if(std::strcmp(buff.begin_arr(), "exit") == 0) {
                 std::cout << "Minishell stopped..." << std::endl;
                 keep_running = false;
                 break;

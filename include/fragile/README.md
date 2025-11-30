@@ -1,0 +1,1 @@
+**My own personal playground, in these directory you might see things that made senior developer mad :)**

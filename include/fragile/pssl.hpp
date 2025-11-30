@@ -128,18 +128,47 @@ struct profile
     bool called() const noexcept { return is_called; }
 };
 
-struct st_profile : public profile {
+struct st_profile {
     private :
+    
+    // Something that majorly affect this profile and only St_parser shall modify are hidden
+    bool is_called : 1 = false;
+    friend class St_parser;
+    
+    public :
+    // Fuck private all control belong to user
+
+    size_t narg;
+    bool is_required : 1 = false;
+    
+    // Determine wether it allow parser to store more than the profile::narg or not
+    bool is_strict : 1 = false;
+    
+    /**
+     * if option was called, invoke profile::callback then exit(0).
+     * this effect doesn't apply in parsing if this was assigned as posarg
+     */
+    bool is_immediate : 1 = false;
+
+    /**
+     * How many option calls are permitted,
+     * if less than 0 then it's infinite
+     */
+    int permitted_call_count = 1;
     const char* lname = nullptr;
     unsigned char sname = '\0';
-
+    
+    /*
+    This is an exception, we can't automatically generate a static array
+    over and over again by function or something. if there is a lot of st_profile
+    that's going to a whole total mess.
+    If you don't get it this structure are SUPPOSED TO initialized at compile-time
+    */
     iterator_array<const char*> value;
-    friend class St_parser;
-    public :
-
+    
     const char* desc = "";
-
-    iterator_viewer<const char*> value_viewer() const { return value.get_viewer(); }
+    
+    
     std::function<void(st_profile&)> callback = [](st_profile& _){};
     
     st_profile& set_callback(const std::function<void(st_profile&)>& func) {
@@ -147,39 +176,62 @@ struct st_profile : public profile {
         return *this;
     }
 
-    st_profile() = default;
-    st_profile(st_profile&& oth) = default;
-    st_profile& operator=(st_profile&&) = default;
+    constexpr st_profile() = default;
+    template <typename... Args>
+    constexpr st_profile(Args&&... args) {
+        value.assign(std::forward<Args>(args)...);
+    }
 
-    st_profile(const st_profile&) = delete;
-    st_profile& operator=(const st_profile&) = delete;
+    constexpr st_profile(st_profile&& oth) = default;
+    constexpr st_profile& operator=(st_profile&&) = default;
+
+    constexpr st_profile(const st_profile&) = delete;
+    constexpr st_profile& operator=(const st_profile&) = delete;
 
     // Below function is just for chaining for cleaner code
 
-    st_profile& set_strict(bool enable = true) noexcept {
+    constexpr st_profile& set_strict(bool enable = true) noexcept {
         is_strict = enable;
         return *this;
     }
 
-    st_profile& set_imme(bool enable = true) noexcept {
+    constexpr st_profile& set_imme(bool enable = true) noexcept {
         is_immediate = enable;
         return *this;
     }
 
-    st_profile& call_count(int call_count) noexcept {
+    constexpr st_profile& call_count(int call_count) noexcept {
         permitted_call_count = call_count;
         return *this;
     }
 
-    st_profile& set_desc(const char* new_desc) noexcept {
+    constexpr st_profile& set_desc(const char* new_desc) noexcept {
         desc = new_desc;
         return *this;
     }
 
-    const char* long_name() const noexcept { return lname; }
-    unsigned char short_name() const noexcept { return sname; }
+    constexpr st_profile& set_lname(const char* new_lname) noexcept {
+        lname = new_lname;
+        return *this;
+    }
+
+    constexpr st_profile& set_sname(unsigned char new_sname) noexcept {
+        sname = new_sname;
+        return *this;
+    }
+
+    constexpr st_profile& set_required(bool enable) noexcept {
+        is_required = enable;
+        return *this;
+    }
+
+    constexpr st_profile& set_narg(size_t new_narg) noexcept {
+        narg = new_narg;
+    }
+    // ain't done yet
 };
 
+/*
 struct dy_profile : public profile {
     private :
     std::string lname;
@@ -239,6 +291,6 @@ struct dy_profile : public profile {
     const std::string& long_name() const noexcept { return lname; }
     unsigned char short_name() const noexcept { return sname; }
 };
-
+*/
 
 #endif

@@ -2,7 +2,7 @@
 #ifndef MIZ_STACK_PARSER_HPP
 #define MIZ_STACK_PARSER_HPP
 
-#include "pssl.hpp"
+#include <ArgParser/pssl.hpp>
 #include <type_traits>
 #include <iostream>
 #include "dependencies/frozen/unordered_map.h"
@@ -17,6 +17,7 @@
 
 // Profile values was stored outside. in stack
 
+
 class St_parser {
     private :
     /**
@@ -24,7 +25,7 @@ class St_parser {
      * short flag = '-'
      * posarg = no suffixes
      */
-    // frozen::unordered_map<frozen::string, st_profile*>* lookup;
+    frozen::unordered_map<frozen::string, st_profile*, 3>* lookup;
 
     iterator_array<st_profile> options;
     iterator_array<st_profile> posargs;
@@ -226,6 +227,7 @@ class St_parser {
     }
 
     St_parser() = default;
+    
 
     template <typename... Args>
     void options_assign(Args&&... iter_arr_constructor_arg) {
@@ -243,6 +245,14 @@ class St_parser {
         posarg_storage_is_defined = true;
         posargs.assign(std::forward<Args>(iter_arr_constructor_arg)...);
     }
+
+    st_profile* get(const std::string_view& name) const noexcept
+    {
+        auto it = lookup->find(name);
+        if(it == lookup->end()) return nullptr;
+        return it->second;
+    }
+
     /*
     bool exist(const std::string_view& name) const
     {
