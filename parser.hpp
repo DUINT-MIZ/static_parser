@@ -5,14 +5,15 @@
 #include <list>
 #include <chrono>
 #include <bitset>
-#include "iterators.hpp"
+#include "detail/iterators.hpp"
+#include "detail/parser_utils.hpp"
+
 /*
 iterator_viewer are more practical than std::span in this context
 it's basically your normal STL'ish iterator
 the difference is it's not a subclass
 and you don't gotta bring another variable to mark where you are !
 */
-
 
 void vec_map(std::vector<const char*>& vec) {
     std::cout << "{ ";
@@ -23,35 +24,9 @@ void vec_map(std::vector<const char*>& vec) {
 }
 
 namespace parser {
+namespace dynamic {
 
-constexpr std::array<bool, 256> identifier_make_table(){
-    std::array<bool, 256> data {};
-
-    for(int i = 0; i < 256; i++){ data[i] = false; }
-
-    for(unsigned char c = '0'; c <= '9'; c++){
-        data[c] = true;
-    }
-
-    for(unsigned char c = 'A'; c <= 'Z'; c++){
-        data[c] = true;
-    }
-
-    for(unsigned char c = 'a'; c <= 'z'; c++){
-        data[c] = true;
-    }
-
-    data['_'] = true;
-    return data;
-}
-
-constexpr auto identifier_char_table = identifier_make_table();
-
-namespace behave {
-    constexpr uint IS_STRICT = 1 << 2;
-    constexpr uint IS_REQUIRED = 1 << 1;
-    constexpr uint IS_IMMEDIATE = 1 << 0;
-};
+using namespace parser;
 
 struct profile {
     private : 
@@ -71,7 +46,7 @@ struct profile {
 
     public : 
     
-    std::function<void(profile& _)> callback = [](profile& _){};
+    std::function<void(profile&)> callback = [](profile& _){};
     
     profile() = default;
     profile(profile&& oth) = default;
@@ -105,25 +80,15 @@ struct profile {
         return *this;
     }
 
+    profile& set_callback(const std::function<void(profile&)>& func) noexcept {
+        callback = func;
+        return *this;
+    }
+
     int call() {
         return times_called;
     }
 };
-
-namespace code {
-    constexpr uint FINALIZE      = 0b10 << 0;
-    constexpr uint OPT_PARSE     = 0b0 << 0;
-    constexpr uint POSARG_PARSE  = 0b1 << 0;
-    
-    constexpr uint UNKNOWN_TOKEN = 0b1  << 2; // Unknown Token
-    constexpr uint INS_NARG      = 0b10 << 2; // Insufficient NArg
-    constexpr uint UNCALLED_REQ  = 0b11 << 2; // Uncalled Required
-    constexpr uint CALL_LIMIT    = 0b1  << 4;
-    constexpr uint CONFLICT      = 0b10 << 4;
-
-    constexpr uint TYPE_MASK = (unsigned)(-1) << 2;
-    constexpr uint FROM_MASK = 0b11;
-}
 
 struct error_bio {
     uint code;
@@ -215,14 +180,6 @@ class parse_error : public std::runtime_error {
     parse_error(error_bio&& new_bio) : bio(std::move(new_bio)), std::runtime_error(make_message(new_bio)) {}
 };
 
-inline int find(const char* str, char c) {
-    int res = -1;
-    char c1;
-    for(int i = 0; (c1 = str[i]) != '\0'; i++) { if(c1 == c) res = i; }
-    return res;
-}
-
-inline bool is_num(char c) { return (('0' <= c) && (c <= '9')); }
 
 class Parser {
     private : 
@@ -417,7 +374,7 @@ class Parser {
 
         if(!lname_empty) {
             if(prof.lname[0] == flag_pref) {
-                if(!valid_long_opt_name(prof.lname.c_str())) {
+                if(!valid_long_opt_name(prof.lname.c_str(), flag_pref)) {
                     throw std::invalid_argument(
                         "Invalid identifier for \"" + prof.lname 
                         + "\" for having an invalid format\n\tIt must follow pattern of \"--[a-zA-Z0-9_]+\""
@@ -441,7 +398,7 @@ class Parser {
         }
 
         if(!sname_empty) {
-            if(!valid_short_opt_name(prof.sname.c_str())) {
+            if(!valid_short_opt_name(prof.sname.c_str(), flag_pref)) {
                 throw std::invalid_argument("Invalid identifier for \"" + prof.sname
                     + "\" For having an invalid format\n\tIt must follow pattern of \"-[a-zA-Z0-9]\"");
             }
@@ -450,43 +407,6 @@ class Parser {
                 throw std::invalid_argument("Invalid identifier for \"" + prof.sname + "\" as it is already existed in map");
             }
         }
-    }
-    
-    bool valid_long_opt_name(const char* name)
-    {   
-        if(name == nullptr) return false;
-        if(
-            (name[0] != flag_pref) &&
-            (name[1] != flag_pref) && 
-            (name[2] == '\0')
-        ) return false;
-        char c;
-        name += 2;
-        while((c = *name++)) {
-            if(!identifier_char_table[c]) return false;
-        }
-        return true;
-    }
-
-    bool valid_short_opt_name(const char* name)
-    {
-        if(name == nullptr) return false;
-        return (
-            (name[0] == flag_pref) &&
-            (identifier_char_table[name[1]]) &&
-            (name[2] == '\0')
-        );
-    }
-
-    bool valid_posarg_name(const char* name)
-    {
-        if(name == nullptr) return false;
-        if(!name[0]) return false; // if not
-        while(name[0] != '\0') {
-            if(!identifier_char_table[name[0]]) return false;
-            name++;
-        }
-        return true;
     }
 
     void map_out() {
@@ -544,7 +464,7 @@ class Parser {
     }
 };
 }
-
+/*
 void print_bit() {
     std::bitset<32> bits;
     bits = parser::code::CALL_LIMIT;
@@ -562,7 +482,8 @@ void print_bit() {
     bits = parser::code::TYPE_MASK;
     std::cout << "TYPE_MASK     : " << bits.to_string() << "\n";
 
-    bits = (parser::code::INS_NARG | parser::code::POSARG_PARSE);
+    bits = (parser::dynamic::code::INS_NARG | parser::code::POSARG_PARSE);
     std::cout << "EXAMPLE       : " << bits.to_string() << "\n";
-
+}
+*/
 }

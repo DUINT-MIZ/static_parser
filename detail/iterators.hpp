@@ -13,45 +13,53 @@ struct iterator_viewer {
     const T* iter = nullptr;
     const T* arr_end = nullptr;
 
+    
     inline constexpr void transport(const iterator_viewer<T>& oth) noexcept {
         beg = oth.beg;
         iter = oth.iter;
         arr_end = oth.arr_end;
     }
-
+    
     public :
     
+    inline constexpr void assign(const T* data, std::size_t size) {
+        beg = data;
+        iter = data;
+        arr_end = data + size;
+    }
+
     inline constexpr void cancel() {
         beg = nullptr;
         iter = nullptr;
         arr_end = nullptr;
     }
+
     constexpr iterator_viewer() = default;
     constexpr iterator_viewer(const iterator_viewer<T>&oth) { transport(oth); }
-    constexpr iterator_viewer(iterator_viewer<T>&& oth) noexcept { 
-        transport(oth); 
+    constexpr iterator_viewer(iterator_viewer<T>&& oth) noexcept {
+        transport(oth);
         oth.cancel();
     }
 
-    constexpr iterator_viewer(T* arr, size_t size) noexcept {
-        beg = arr;
-        iter = arr;
-        arr_end = arr + size;
+    constexpr iterator_viewer(const T* data, size_t size) noexcept {
+        assign(data, size);
     }
 
-    template <typename U = T, typename std::enable_if<!std::is_const<U>::value, void>::type>
-    constexpr iterator_viewer(std::vector<T>& vec) noexcept {
-        beg = vec.data();
-        iter = vec.data();
-        arr_end = beg + vec.size();
+    template <typename U = T, typename std::enable_if_t<!std::is_const_v<U>>>
+    constexpr iterator_viewer(const std::vector<T>& vec) noexcept {
+        assign(vec.data(), vec.size());
     }
+
+    template <typename U = T, typename std::enable_if_t<!std::is_const_v<U>>>
+    constexpr iterator_viewer(std::vector<T>&& vec) = delete;
 
     template <size_t N>
     constexpr iterator_viewer(const std::array<T, N>& arr) noexcept {
-        beg = arr.data();
-        iter = arr.data();
-        arr_end = beg + N;
+        assign(arr.data(), N);
     }
+
+    template <size_t N>
+    constexpr iterator_viewer(std::array<T, N>&& arr) = delete;
 
     constexpr iterator_viewer& operator=(const iterator_viewer<T>&oth) noexcept {
         if(&oth != this) transport(oth);
@@ -64,20 +72,22 @@ struct iterator_viewer {
     }
 
     template <typename U = T, typename std::enable_if<!std::is_const<U>::value, void>::type>
-    constexpr iterator_viewer& operator=(std::vector<T>& vec) noexcept {
-        beg = vec.data();
-        iter = vec.data();
-        arr_end = beg + vec.size();
+    constexpr iterator_viewer& operator=(const std::vector<T>& vec) noexcept {
+        assign(vec.data(), vec.size());
+        return *this;
+    }
+
+    template <typename U = T, typename std::enable_if<!std::is_const<U>::value, void>::type>
+    constexpr iterator_viewer& operator=(std::vector<T>&& vec) = delete;
+
+    template <size_t N>
+    constexpr iterator_viewer& operator=(const std::array<T, N>& arr) noexcept {
+        assign(arr.data(), N);
         return *this;
     }
 
     template <size_t N>
-    constexpr iterator_viewer& operator=(std::array<T, N>& arr) noexcept {
-        beg = arr.data();
-        iter = arr.data();
-        arr_end = beg + N;
-        return *this;
-    }
+    constexpr iterator_viewer& operator=(std::array<T, N>&& arr) = delete;
 
     constexpr const T& operator*() const noexcept { return *iter; }
     constexpr iterator_viewer& operator++() noexcept { 
@@ -126,11 +136,17 @@ struct iterator_viewer {
         return *this;
     }
 
+    const T& operator[](std::size_t index) const noexcept { return beg[index]; }
+
     constexpr inline void rewind() noexcept { iter = beg; }
-    constexpr size_t count_iterated() const noexcept { return iter - beg; }
-    constexpr size_t count_iterable() const noexcept { return arr_end - iter; }
-    constexpr size_t total_size() const noexcept { return arr_end - beg; }
+    constexpr std::size_t count_iterated() const noexcept { return iter - beg; }
+    constexpr std::size_t count_iterable() const noexcept { return arr_end - iter; }
+    constexpr std::size_t total_size() const noexcept { return arr_end - beg; }
     constexpr bool end_reached() const noexcept { return (iter == arr_end); }
+    constexpr const T* front() const noexcept { return beg; }
+    constexpr const T* now() const noexcept { return iter; }
+    constexpr const T* back() const noexcept { return arr_end; }
+
 
     class iterator {
         private :
@@ -178,8 +194,8 @@ template <typename T>
 Lightweight, 
 */
 struct iterator_array {
-    static_assert(!std::is_const<T>::value ||
-        std::is_pointer<T>::value,
+    static_assert(!std::is_const_v<T> ||
+        std::is_pointer_v<T>,
         "Really, what how do you think this can manage array data, if it's const ?");
 
     private :
@@ -201,7 +217,7 @@ struct iterator_array {
         end_allocated = beg + size;
     }
 
-    constexpr inline void assign(const T* data, size_t size, size_t offset) noexcept {
+    constexpr inline void assign(T* data, size_t size, size_t offset) noexcept {
         beg = data;
         end_added = data + offset;
         end_allocated = beg + size;
@@ -261,17 +277,19 @@ struct iterator_array {
         
     }
 
-    T& operator[](size_t index) noexcept { return beg[index]; }
+    T& operator[](std::size_t index) noexcept { return beg[index]; }
 
     constexpr iterator_viewer<T> get_viewer() const noexcept {
         return iterator_viewer<T>(beg, (end_added - beg));
     }
     
-    constexpr size_t count_insertable() const noexcept { return (end_allocated - end_added); }
-    constexpr size_t count_inserted() const noexcept { return (end_added - beg); }
-    constexpr size_t total_capacity() const noexcept { return (end_allocated - beg); }
+    constexpr std::size_t count_insertable() const noexcept { return (end_allocated - end_added); }
+    constexpr std::size_t count_inserted() const noexcept { return (end_added - beg); }
+    constexpr std::size_t total_capacity() const noexcept { return (end_allocated - beg); }
     constexpr bool full() const noexcept { return (end_added == end_allocated); }
     constexpr bool empty() const noexcept { return (end_added == beg); }
+    constexpr T& back() const noexcept { return *(end_added - 1); }
+    constexpr T& front() const noexcept { return *beg; }
 
     class iterator {
         private :
