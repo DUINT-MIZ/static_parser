@@ -4,10 +4,12 @@
 #include <frozen/unordered_map.h>
 #include <frozen/string.h>
 #include <iostream>
+#include <variant>
+#include <cstring>
 #include <charconv>
 
+#include "detail/values.hpp"
 #include "detail/iterators.hpp"
-#include "detail/polytypes.hpp"
 #include "detail/parser_utils.hpp"
 
 namespace parser {
@@ -24,11 +26,19 @@ class comtime_evaluation : public std::exception  {
     const char* what() noexcept { return msg.data(); }
 };
 
-enum class val_type {
-    ARRAY,
-    VAR_REF,
-    NONE
+enum class FlowStatus {
+    CONTINUE,
+    ABORT
 };
+
+
+constexpr size_t string_length(const char* str) noexcept {
+    size_t res = 0;
+    while(*(str++) != '\0') ++res;
+    return res;
+}
+
+
 
 struct static_profile {
     private :
@@ -44,13 +54,15 @@ struct static_profile {
     uint64_t conflict_mask           = 0;
     int permitted_call_count         = 0;
     std::size_t narg                 = 0;
-    polytype::type_code convert_code = polytype::type_code::UNDEFINED;
+    values::TypeCode convert_code = values::TypeCode::UNDEFINED;
 
     constexpr static_profile& identifier(const char* new_lname, const char* new_sname) noexcept {
         lname = new_lname;
         sname = new_sname;
         return *this;
     }
+
+    constexpr static_profile& self() noexcept { return *this; }
 
     constexpr static_profile& behavior(uint flag) noexcept {
         is_required = (flag & behave::IS_REQUIRED);
@@ -74,7 +86,7 @@ struct static_profile {
         return *this;
     }
 
-    constexpr static_profile& convert_to(polytype::type_code conv_code) noexcept {
+    constexpr static_profile& convert_to(values::TypeCode conv_code) noexcept {
         convert_code = conv_code;
         return *this;
     }
@@ -83,73 +95,39 @@ struct static_profile {
 struct modifiable_profile {
     private :
     int times_called = 0;
-    val_type value_type = val_type::NONE;
-    union {
-        polytype::NumberedPtr ptr_val;
-        iterator_array<polytype::Values> arr_val;
-    } value;
-
     template <typename IdentifierCount, typename NumberOfPosarg> friend class Parser;
-
-    public :
     
-    std::function<void(static_profile, modifiable_profile&)> callback;
+    public :
+    #ifdef STATIC_PARSER_NO_HEAP
+    using FunctionType = void (*)(static_profile, modifiable_profile&);
+    #else
+    
+    using FunctionType = std::function<void(static_profile, modifiable_profile&)>;
+    #endif
+    FunctionType callback;
+    values::BoundValue value;
+    
+    modifiable_profile() = default;
+    modifiable_profile(modifiable_profile&& oth) = default;
+    modifiable_profile(const modifiable_profile& oth) = default;
+    
+    modifiable_profile& operator=(modifiable_profile&& oth) = default;
 
-    modifiable_profile() : value{} {}
-    template <typename T>
-    typename std::enable_if<polytype::restype_supported<T>::value, modifiable_profile&>::type
-    bind(T& val) {
-        value.ptr_val = val;
-        value_type = val_type::VAR_REF;
+    modifiable_profile& operator=(const modifiable_profile& oth) = default;
+
+    modifiable_profile& set_value(values::BoundValue& new_val) {
+        value = std::move(new_val);
         return *this;
     }
 
-    template <typename... Args>
-    modifiable_profile& bind(Args&&... iterator_array_constructor_arg) {
-        value.arr_val = iterator_viewer(
-            std::forward<Args>(iterator_array_constructor_arg)...
-        );
-        value_type = val_type::ARRAY;
-        return *this;
-    }
-
-    modifiable_profile& set_callback(const std::function<void(static_profile, modifiable_profile&)>& func) {
+    modifiable_profile& set_callback(const FunctionType& func) {
         callback = func;
         return *this;
     }
 
-    modifiable_profile& operator=(modifiable_profile&& other) {
-        if (this == &other) return *this;
+    modifiable_profile& self() noexcept { return *this; }
 
-        this->times_called = other.times_called;
-        this->value_type = other.value_type;
-        this->callback = std::move(other.callback);
-
-        if (other.value_type == val_type::ARRAY) {
-            this->value.arr_val = std::move(other.value.arr_val);
-        } 
-        else if (other.value_type == val_type::VAR_REF) {
-            this->value.ptr_val = other.value.ptr_val;
-        }
-        
-        return *this;
-    }
-
-    polytype::NumberedPtr& get_ptr() {
-        if(value_type == val_type::VAR_REF) {
-            return value.ptr_val;
-        } else {
-            throw std::bad_cast();
-        }
-    }
-    
-    iterator_array<polytype::Values>& get_arr() {
-        if(value_type == val_type::ARRAY) {
-            return value.arr_val;
-        } else {
-            throw std::bad_cast();
-        }
-    }
+    constexpr int call_count() const noexcept { return times_called; }
 };
 
 
@@ -158,7 +136,7 @@ template <std::size_t N> struct PosargCount { static constexpr std::size_t value
 template <std::size_t N> struct DumpCapacity { static constexpr std::size_t value = N; };
 
 template <size_t TotalProfiles>
-// A Small class to hold an array of modifiable_profile that user can't access
+// A Small class to hold an array of modifiable_profile that user cant access
 class AligningData {
     static_assert((TotalProfiles > 0), "AligningData size must not be 0");
     private :
@@ -174,29 +152,25 @@ class AligningData {
     public :
 };
 
-class ServedData {
+
+template <size_t N>
+constexpr size_t count_identifier(const frozen::unordered_map<frozen::string, const static_profile*, N>&) noexcept { return N; }
+
+template <size_t N>
+constexpr size_t count_posarg(const std::array<static_profile, N>& arr) {
+    size_t result = 0;
+    for(const static_profile& prof : arr) { if(prof.lname) if(prof.lname[0] != '-') ++result; }
+    return result;
+};
+
+class BlobArrayIterator {
     private :
-    modifiable_profile* start = nullptr;
-    modifiable_profile* end = nullptr;
-    std::function<std::size_t(const char*)> find_position;
 
     public :
-    ServedData() = delete;
 
-    template <size_t N>
-    ServedData(std::pair<AligningData<N>&, std::function<std::size_t(const char)>&&> d)
-        : find_position(std::move(d.second))
-    {
-        start = d.first.arr.data();
-        end = &d.first.arr.back() + 1;
-    }
+    class iterator {
 
-    modifiable_profile& get(const char* name) {
-        auto idx = find_position(name);
-        if((signed)idx == -1) throw std::invalid_argument("Get failed, unknown name");
-        return start[idx];
-    }
-
+    };
 };
 
 template <typename IdentifierCount, typename NumberOfPosarg>
@@ -204,7 +178,7 @@ class Parser {
     static_assert(
         std::is_same_v<IdentifierCount, IDCount<IdentifierCount::value>> &&
         std::is_same_v<NumberOfPosarg, PosargCount<NumberOfPosarg::value>>,
-        "Wrong template argument type. should've just use IDCount<N> and PosargCount<N>"
+        "Wrong template argument type. shouldve just use IDCount<N> and PosargCount<N>"
     );
 
     private :
@@ -212,34 +186,37 @@ class Parser {
 
     const map_type& map;
     iterator_viewer<static_profile> profiles;
-    std::array<const static_profile*, NumberOfPosarg::value> posargs_data;
+    std::array<const static_profile*, NumberOfPosarg::value> posargs_data{};
     iterator_array<const static_profile*> posargs;
 
+    // Handles all of converting task.
     void convert(
         void* dest,
-        polytype::type_code code,
-        const char* str
+        values::TypeCode code,
+        const char* token
     ) const {
         switch (code)
         {
-        case polytype::type_code::INT :
-            *(reinterpret_cast<int*>(dest)) = std::stoi(str);
+        case values::TypeCode::INT :
+            if(std::from_chars(token, token + std::strlen(token), *((int*)dest)).ec != std::errc())
+                throw std::runtime_error("Can't convert token into an int");
             break;
             
-        case polytype::type_code::DOUBLE :
-            *(reinterpret_cast<double*>(dest)) = std::stod(str);
+        case values::TypeCode::DOUBLE :
+            if(std::from_chars(token, token + std::strlen(token), *((double*)dest)).ec != std::errc())
+                throw std::runtime_error("Can't convert token into a double");
             break;
         
-        case polytype::type_code::STRING :
-            *(reinterpret_cast<const char**>(dest)) = str;
+        case values::TypeCode::STRING :
+            *(reinterpret_cast<const char**>(dest)) = token;
             break;
 
         default:
-            throw std::runtime_error("Can't convert token because of unknown type information...");
-            break;
+            throw std::runtime_error("Cant convert token because of unknown type information...");
+            break; 
         }
     }
-    // Handles all of converting task.
+
     template <typename IteratorType>
     void fetch(
         modifiable_profile& mod_prof,
@@ -248,25 +225,21 @@ class Parser {
         const char* token,
         bool (*check)(const char*) = [](const char* _){ return false; }
     ) const {
-        
-        switch (mod_prof.value_type)
+        switch (mod_prof.value.get_value_tag())
         {
-        case val_type::VAR_REF :
-            std::cout << "Variable reference insert" << std::endl;
-            convert(
-                mod_prof.value.ptr_val.ptr,
-                static_prof.convert_code,
-                token
-            );
+        case values::ValTag::VAR_REF :
+            convert(mod_prof.value.get_raw_ptr(), static_prof.convert_code, token);
             ++input_iter;
             break;
         
-        case val_type::ARRAY :
+        case values::ValTag::ARRAY :
             {
-                iterator_array<polytype::Values>& value = mod_prof.value.arr_val;
+                iterator_array<values::Blob>& value = mod_prof.value.get_array();
                 std::size_t to_parse = static_prof.narg - value.count_inserted();
-                polytype::type_code code = static_prof.convert_code;
+                values::TypeCode code = static_prof.convert_code;
                 bool stopped_by_token_invalidation = false;
+                bool stopped_by_full_value = false;
+                
                 arr_fetch:
                 while((to_parse != 0) && !input_iter.end_reached()) {
                     token = *input_iter;
@@ -276,11 +249,12 @@ class Parser {
                         break;
                     }
 
-                    convert(
-                        &value.back().buf,
-                        code,
-                        token
-                    );
+                    if(value.full()) {
+                        stopped_by_full_value = true;
+                        break;
+                    }
+                    value.push_back();
+                    convert((void*)value.back().data(), code, token);
 
                     ++input_iter;
                     --to_parse;
@@ -289,9 +263,13 @@ class Parser {
                 if((signed)to_parse > 0) {
                     throw std::runtime_error("Invalid number of argument received");
                 }
-                if(stopped_by_token_invalidation) return;
+
+                if(stopped_by_token_invalidation ||
+                    stopped_by_full_value ||
+                    input_iter.end_reached()
+                ) return;
+
                 if(!static_prof.is_strict) {
-                    // Not stricted, then take anything until token criteria are met
                     to_parse = (unsigned)-1;
                     goto arr_fetch;
                 } 
@@ -300,12 +278,14 @@ class Parser {
             break;
         
         default:
+            
             break;
         }
+        ++mod_prof.times_called;
     }
 
     template <size_t N>
-    void handle_opt(
+    FlowStatus handle_opt(
         iterator_viewer<char*>& argv_iter,
         AligningData<N>& aligning_data,
         iterator_array<const char*>& dump
@@ -322,7 +302,7 @@ class Parser {
             if(
                 (
                 (token[0] == '-') &&
-                (('0' <= token[1]) && (token[1] <= '9')) // if token is a possible negative number
+                ((0 <= token[1]) && (token[1] <= 9)) // if token is a possible negative number
                 ) || 
                 (token[0] != '-')
             ) {
@@ -330,6 +310,8 @@ class Parser {
                 ++argv_iter;
                 continue;
             }
+
+            if(std::strcmp(token, "--") == 0) return FlowStatus::CONTINUE; 
 
             equ_pos = find(token, '=');
 
@@ -352,7 +334,7 @@ class Parser {
                 throw std::runtime_error("Flags Conflicted");
             } else conflicts |= prof->conflict_mask;
 
-            if(mod_prof->times_called++ >= prof->permitted_call_count) {
+            if(mod_prof->times_called >= prof->permitted_call_count) {
                 throw std::runtime_error("Permitted call_count reached");
             }
 
@@ -363,21 +345,35 @@ class Parser {
                 token,
                 [](const char* token){ return (token[0] == '-'); }
             );
-            std::cout << "argv_iter pos (after fetch) : " << argv_iter.count_iterated() << std::endl;
+            
+
+            if(prof->is_immediate) {
+                mod_prof->callback(*prof, *mod_prof);
+                return FlowStatus::ABORT;
+            }   
         }
+        return FlowStatus::CONTINUE;
     }
     template <size_t N>
-    void handle_posarg(
+    FlowStatus handle_posarg(
         AligningData<N>& aligning_data,
         iterator_array<const char*>& dump_arr
     ) const {
         auto posarg_iter = posargs.get_viewer();
         auto dump_iter = dump_arr.get_viewer();
+        
+            
+        
+        for(const static_profile* a : posarg_iter) {
+            
+        }
+        
         const char* tok;
         while(!dump_iter.end_reached() && !posarg_iter.end_reached()) {
             tok = *dump_iter;
+            modifiable_profile& mod_prof = aligning_data.arr[(*posarg_iter - profiles.front())];
             fetch<const char*>(
-                aligning_data.arr[(*posarg_iter - posargs.front())],
+                mod_prof,
                 **(posarg_iter++),
                 dump_iter,
                 *dump_iter
@@ -389,6 +385,9 @@ class Parser {
         
         if(!dump_iter.end_reached())
             throw std::runtime_error("Unknown dump inputs, there is no positional argument left to parse...");
+        
+        
+        return FlowStatus::CONTINUE;
     }
 
     constexpr void verify_name(const static_profile* target, const char* name) {
@@ -414,7 +413,10 @@ class Parser {
         std::size_t valid_mappings = 0;
         std::size_t valid_mappings_2 = 0;
         for(auto& profile : profiles) {
-            if(profile.convert_code == polytype::type_code::UNDEFINED) throw comtime_evaluation("Undefined convert_code");
+            if(
+                (profile.convert_code == values::TypeCode::UNDEFINED) &&
+                (profile.narg != 0) 
+            ) throw comtime_evaluation("Undefined convert_code... this convert code only permitted if narg was 0");
 
             if(profile.lname) {
                 if(profile.lname[0] == '-') {
@@ -469,33 +471,45 @@ class Parser {
             "Unknown identifier name, can't align data..."
         );
 
-        switch (mod_prof.value_type)
+        switch (mod_prof.value.get_value_tag())
         {
-        case val_type::VAR_REF :
-            if(mod_prof.value.ptr_val.code != it->second->convert_code){
-                throw std::invalid_argument(
-                    "Variable reference type information does not match with static_profile::convert_type"
-                );
-            }
+        case values::ValTag::VAR_REF : 
             if(it->second->narg != 1)
                 throw std::invalid_argument(
                         "Variable reference shouldn't be align with static_profile::narg != 1"
                     );
+
+            if(mod_prof.value.get_type_code() != it->second->convert_code) {
+                
+                        
+                throw std::invalid_argument(
+                    "Variable reference type code mismatch"
+                );
+            }
             break;
         
-        case val_type::ARRAY :
-            if(mod_prof.value.arr_val.total_capacity() < it->second->narg)
+        case values::ValTag::ARRAY :
+            if(mod_prof.value.get_array().total_capacity() < it->second->narg)
                 throw std::invalid_argument(
                     "total storage can't hold amount of value at least required by static_profile::narg"
                 );
             break;
         
-        default:
+        case values::ValTag::NONE :
+            if(it->second->narg == 0) {
+                break;
+            }
+            throw std::invalid_argument(
+                    "NONE Value type only permitted if corresponding aligning static_profile narg are 0"
+                );
+            break;
+        
+        default : 
             throw std::invalid_argument("Unknown value_type can't align data...");
             break;
         }
         std::ptrdiff_t diff = (it->second - profiles.front());
-        // std::cout << "ptrdiff = " << diff << std::endl;
+        // 
         aligning_data.align(std::move(mod_prof), diff);
         return aligning_data.arr[diff];
     }
@@ -506,26 +520,33 @@ class Parser {
             std::is_same<dump_size, DumpCapacity<dump_size::value>>::value,
             "template argument dump_size must be inserted with DumpCapacity<N>"
         );
-        
+
         if(profiles.total_size() != N)
             throw std::runtime_error("Invalid alinging data with total profiles, parsing fail");
         
         std::array<const char*, dump_size::value> dump_dat = {};
         iterator_array<const char*> dump_arr(dump_dat);
+        
         iterator_viewer<char*> argv_iter(argv, argc);
 
-        handle_opt<N>(argv_iter, data, dump_arr);
-        handle_posarg<N>(data, dump_arr);
+        if(handle_opt<N>(argv_iter, data, dump_arr) == FlowStatus::ABORT) return;
+        
+        if(handle_posarg<N>(data, dump_arr) == FlowStatus::ABORT) return;
 
         // Finalize
         std::size_t limit = profiles.total_size();
         const static_profile* prof = nullptr;
         modifiable_profile* mod_prof = nullptr;
         for(std::size_t i = 0; i < limit; i++) {
-            auto something = profiles[i];
+            if(profiles[i].is_required && !data.arr[i].times_called)
+                throw std::runtime_error("A required option/posarg was not called");
         }
 
-
+        for(std::size_t i = 0; i < limit; i++) {
+            modifiable_profile& prof = data.arr[i];
+            if(prof.times_called)
+                prof.callback(profiles[i], prof);
+        }
     }
 };
 

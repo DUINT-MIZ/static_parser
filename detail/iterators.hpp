@@ -267,6 +267,12 @@ struct iterator_array {
         ++end_added;
     }
 
+    constexpr void push_back() {
+        if(end_added >= end_allocated) throw std::overflow_error("iterator_array. can't push back. array full");
+        *end_added = T();
+        ++end_added;
+    }
+
     constexpr void pull_back() {
         if(end_added <= beg) {
             end_added = beg;
