@@ -53,7 +53,7 @@ int main(int argc, char* argv[]) {
             .bind(iterator_array<parser::values::Blob>(target_files))
         )
     );
-
+    std::cout << "Parsing started..." << std::endl;
     parser_ins.parse<2, parser::statis::DumpCapacity<2>>(aligning_data, ++argv, --argc);
     for(auto& blob : target_files) {
         std::cout << "Values : " << *((const char**)blob.data()) << std::endl;

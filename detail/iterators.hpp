@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <array>
 #include <vector>
+#define MIZ_ITERATOR_DEBUG
 
 template <typename T>
 struct iterator_viewer {

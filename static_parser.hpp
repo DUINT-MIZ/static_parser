@@ -31,20 +31,13 @@ enum class FlowStatus {
     ABORT
 };
 
-
 constexpr size_t string_length(const char* str) noexcept {
     size_t res = 0;
     while(*(str++) != '\0') ++res;
     return res;
 }
 
-
-
 struct static_profile {
-    private :
-    std::size_t index = 0;
-    template <typename IdentifierCount, typename NumberOfPosarg> friend class Parser;
-
     public :
     const char* lname                = nullptr;
     const char* sname                = nullptr;
@@ -54,6 +47,7 @@ struct static_profile {
     uint64_t conflict_mask           = 0;
     int permitted_call_count         = 0;
     std::size_t narg                 = 0;
+    int exclude_point                = -1;
     values::TypeCode convert_code = values::TypeCode::UNDEFINED;
 
     constexpr static_profile& identifier(const char* new_lname, const char* new_sname) noexcept {
@@ -88,6 +82,11 @@ struct static_profile {
 
     constexpr static_profile& convert_to(values::TypeCode conv_code) noexcept {
         convert_code = conv_code;
+        return *this;
+    }
+
+    constexpr static_profile& exclude_on(int point) {
+        exclude_point = point;
         return *this;
     }
 };
@@ -142,6 +141,7 @@ class AligningData {
     private :
     std::array<modifiable_profile, TotalProfiles> arr;
     std::array<bool, TotalProfiles> initialized;
+    std::array<const static_profile*, TotalProfiles> mutex_point{0};
     template <typename IdentifierCount, typename NumberOfPosarg> friend class Parser;
     
     void align(modifiable_profile&& mod_prof, std::size_t index) {
@@ -161,16 +161,6 @@ constexpr size_t count_posarg(const std::array<static_profile, N>& arr) {
     size_t result = 0;
     for(const static_profile& prof : arr) { if(prof.lname) if(prof.lname[0] != '-') ++result; }
     return result;
-};
-
-class BlobArrayIterator {
-    private :
-
-    public :
-
-    class iterator {
-
-    };
 };
 
 template <typename IdentifierCount, typename NumberOfPosarg>
@@ -199,12 +189,12 @@ class Parser {
         {
         case values::TypeCode::INT :
             if(std::from_chars(token, token + std::strlen(token), *((int*)dest)).ec != std::errc())
-                throw std::runtime_error("Can't convert token into an int");
+                throw parse_error((std::string("Can't convert ") + token) + ", to an int");
             break;
             
         case values::TypeCode::DOUBLE :
             if(std::from_chars(token, token + std::strlen(token), *((double*)dest)).ec != std::errc())
-                throw std::runtime_error("Can't convert token into a double");
+                throw parse_error((std::string("Can't convert ") + token) + ", to a double");
             break;
         
         case values::TypeCode::STRING :
@@ -212,7 +202,7 @@ class Parser {
             break;
 
         default:
-            throw std::runtime_error("Cant convert token because of unknown type information...");
+            throw parse_error(std::string("Unknown type information, for flag/posarg associated with token = ") + token);
             break; 
         }
     }
@@ -239,7 +229,6 @@ class Parser {
                 values::TypeCode code = static_prof.convert_code;
                 bool stopped_by_token_invalidation = false;
                 bool stopped_by_full_value = false;
-                
                 arr_fetch:
                 while((to_parse != 0) && !input_iter.end_reached()) {
                     token = *input_iter;
@@ -261,7 +250,14 @@ class Parser {
                 }
 
                 if((signed)to_parse > 0) {
-                    throw std::runtime_error("Invalid number of argument received");
+                    throw parse_error(
+                        "Unsatisfied Narg need "
+                        + std::to_string(static_prof.narg) + ", got "
+                        + (
+                            std::to_string(static_prof.narg - to_parse) 
+                            + ", restricted by "
+                        )
+                        + (!static_prof.lname ? static_prof.sname : static_prof.lname));
                 }
 
                 if(stopped_by_token_invalidation ||
@@ -306,6 +302,13 @@ class Parser {
                 ) || 
                 (token[0] != '-')
             ) {
+                if(dump.full()) {
+                    throw parse_error(
+                        "Dump full, you can't pass more than "
+                        + std::to_string(dump.total_capacity())
+                        + " for posarg"
+                    );
+                }
                 dump.push_back(token);
                 ++argv_iter;
                 continue;
@@ -321,21 +324,36 @@ class Parser {
                 token = &token[equ_pos + 1];
             } else {
                 it = map.find(frozen::string(token));
-                token = *(++argv_iter);
+                ++argv_iter;
             }
 
             if(it == map.end()) {
-                throw std::runtime_error("Unknown flag is passed");
+                throw parse_error(
+                    (std::string("\"") + token)
+                    + "\" Is an unknown flag"
+                );
             }
 
             prof = it->second;
             mod_prof = &aligning_data.arr[prof - profiles.front()];
-            if(conflicts & prof->conflict_mask) {
-                throw std::runtime_error("Flags Conflicted");
-            } else conflicts |= prof->conflict_mask;
+            
+            if(prof->exclude_point > -1){
+                if(
+                    aligning_data.mutex_point[prof->exclude_point] != nullptr &&
+                    aligning_data.mutex_point[prof->exclude_point] != prof
+                ) {
+                    prof = aligning_data.mutex_point[prof->exclude_point];
+                    throw parse_error(
+                        (
+                            (std::string("Flag ") + token)
+                            + " Conflicted with "
+                        ) + (prof->lname ? prof->lname : prof->sname)
+                    );
+                } else aligning_data.mutex_point[prof->exclude_point] = prof;
+            }
 
             if(mod_prof->times_called >= prof->permitted_call_count) {
-                throw std::runtime_error("Permitted call_count reached");
+                throw parse_error(std::string("Permitted call_count reached, for ") + token);
             }
 
             fetch<char*>(
@@ -345,12 +363,10 @@ class Parser {
                 token,
                 [](const char* token){ return (token[0] == '-'); }
             );
-            
-
             if(prof->is_immediate) {
                 mod_prof->callback(*prof, *mod_prof);
                 return FlowStatus::ABORT;
-            }   
+            }
         }
         return FlowStatus::CONTINUE;
     }
@@ -361,12 +377,6 @@ class Parser {
     ) const {
         auto posarg_iter = posargs.get_viewer();
         auto dump_iter = dump_arr.get_viewer();
-        
-            
-        
-        for(const static_profile* a : posarg_iter) {
-            
-        }
         
         const char* tok;
         while(!dump_iter.end_reached() && !posarg_iter.end_reached()) {
@@ -381,10 +391,10 @@ class Parser {
         }
 
         if(!posarg_iter.end_reached()) 
-            throw std::runtime_error("There is still another positional argument left to parse");
+            throw parse_error("There is still another positional argument left to parse");
         
         if(!dump_iter.end_reached())
-            throw std::runtime_error("Unknown dump inputs, there is no positional argument left to parse...");
+            throw parse_error("Unknown dump inputs, there is no positional argument left to parse...");
         
         
         return FlowStatus::CONTINUE;
@@ -417,6 +427,9 @@ class Parser {
                 (profile.convert_code == values::TypeCode::UNDEFINED) &&
                 (profile.narg != 0) 
             ) throw comtime_evaluation("Undefined convert_code... this convert code only permitted if narg was 0");
+
+            if(profile.exclude_point >= (signed)profiles.total_size())
+                throw comtime_evaluation("Exclude point was out of range");
 
             if(profile.lname) {
                 if(profile.lname[0] == '-') {
@@ -539,7 +552,7 @@ class Parser {
         modifiable_profile* mod_prof = nullptr;
         for(std::size_t i = 0; i < limit; i++) {
             if(profiles[i].is_required && !data.arr[i].times_called)
-                throw std::runtime_error("A required option/posarg was not called");
+                throw parse_error("A required option/posarg was not called");
         }
 
         for(std::size_t i = 0; i < limit; i++) {

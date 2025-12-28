@@ -3,23 +3,16 @@
 #define MIZ_PARSER_UTILS_HPP
 #include <cstdint>
 #include <array>
+#include <stdexcept>
+#include <string>
 
 namespace parser {
 typedef unsigned int uint;
-namespace code {
-    constexpr uint FINALIZE      = 0b10 << 0;
-    constexpr uint OPT_PARSE     = 0b0  << 0;
-    constexpr uint POSARG_PARSE  = 0b1  << 0;
-    
-    constexpr uint UNKNOWN_TOKEN = 0b1  << 2; // Unknown Token
-    constexpr uint INS_NARG      = 0b10 << 2; // Insufficient NArg
-    constexpr uint UNCALLED_REQ  = 0b11 << 2; // Uncalled Required
-    constexpr uint CALL_LIMIT    = 0b1  << 4;
-    constexpr uint CONFLICT      = 0b10 << 4;
 
-    constexpr uint TYPE_MASK = (unsigned)(-1) << 2;
-    constexpr uint FROM_MASK = 0b11;
-}
+class parse_error : public std::runtime_error {
+    public:
+    parse_error(const std::string& msg) : std::runtime_error(msg) {}
+};
 
 namespace behave {
     constexpr uint IS_STRICT = 1 << 2;
