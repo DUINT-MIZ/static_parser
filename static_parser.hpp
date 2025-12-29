@@ -44,7 +44,6 @@ struct static_profile {
     bool is_required                 = false;
     bool is_strict                   = false;
     bool is_immediate                = false;
-    uint64_t conflict_mask           = 0;
     int permitted_call_count         = 0;
     std::size_t narg                 = 0;
     int exclude_point                = -1;
@@ -75,11 +74,6 @@ struct static_profile {
         return *this;
     }
 
-    constexpr static_profile& conflict(std::size_t new_conflict) noexcept {
-        conflict_mask = new_conflict;
-        return *this;
-    }
-
     constexpr static_profile& convert_to(values::TypeCode conv_code) noexcept {
         convert_code = conv_code;
         return *this;
@@ -103,7 +97,7 @@ struct modifiable_profile {
     
     using FunctionType = std::function<void(static_profile, modifiable_profile&)>;
     #endif
-    FunctionType callback;
+    FunctionType callback = [](static_profile, modifiable_profile&){};
     values::BoundValue value;
     
     modifiable_profile() = default;
@@ -345,7 +339,7 @@ class Parser {
                     prof = aligning_data.mutex_point[prof->exclude_point];
                     throw parse_error(
                         (
-                            (std::string("Flag ") + token)
+                            (std::string("Flag ") + *argv_iter)
                             + " Conflicted with "
                         ) + (prof->lname ? prof->lname : prof->sname)
                     );
@@ -463,16 +457,7 @@ class Parser {
         const char* identifier_name,
         modifiable_profile& mod_prof
     ) const {
-        {
-        bool* iter = aligning_data.initialized.data();
-        bool* end = &aligning_data.initialized.back() + 1;
-        while(*(iter++) && (iter != end)){}
-        if(iter != end)
-            throw std::invalid_argument(
-                "Aligning data does not fully initialized"
-            );
-        }
-
+        
         if(profiles.total_size() != N) {
             throw std::invalid_argument(
                 "Aligning data length does not match with total profile"
@@ -541,7 +526,7 @@ class Parser {
         iterator_array<const char*> dump_arr(dump_dat);
         
         iterator_viewer<char*> argv_iter(argv, argc);
-
+        
         if(handle_opt<N>(argv_iter, data, dump_arr) == FlowStatus::ABORT) return;
         
         if(handle_posarg<N>(data, dump_arr) == FlowStatus::ABORT) return;
