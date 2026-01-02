@@ -7,6 +7,7 @@
 #include <variant>
 #include <cstring>
 #include <charconv>
+#include <type_traits>
 
 #include "detail/values.hpp"
 #include "detail/iterators.hpp"
@@ -20,10 +21,10 @@ using namespace parser;
 // Compile Time Evalution error class
 class comtime_evaluation : public std::exception  {
     private :
-    std::string msg;
+    const char* msg;
     public :
-    comtime_evaluation(const std::string& err_msg) : msg(err_msg) {}
-    const char* what() noexcept { return msg.data(); }
+    comtime_evaluation(const char* err_msg) : msg(err_msg) {}
+    const char* what() noexcept { return msg; }
 };
 
 enum class FlowStatus {
@@ -54,8 +55,6 @@ struct static_profile {
         sname = new_sname;
         return *this;
     }
-
-    constexpr static_profile& self() noexcept { return *this; }
 
     constexpr static_profile& behavior(uint flag) noexcept {
         is_required = (flag & behave::IS_REQUIRED);
@@ -146,17 +145,6 @@ class AligningData {
     public :
 };
 
-
-template <size_t N>
-constexpr size_t count_identifier(const frozen::unordered_map<frozen::string, const static_profile*, N>&) noexcept { return N; }
-
-template <size_t N>
-constexpr size_t count_posarg(const std::array<static_profile, N>& arr) {
-    size_t result = 0;
-    for(const static_profile& prof : arr) { if(prof.lname) if(prof.lname[0] != '-') ++result; }
-    return result;
-};
-
 template <typename IdentifierCount, typename NumberOfPosarg>
 class Parser {
     static_assert(
@@ -168,7 +156,7 @@ class Parser {
     private :
     using map_type = frozen::unordered_map<frozen::string, const static_profile*, IdentifierCount::value>;
 
-    const map_type& map;
+    map_type map;
     iterator_viewer<static_profile> profiles;
     std::array<const static_profile*, NumberOfPosarg::value> posargs_data{};
     iterator_array<const static_profile*> posargs;
@@ -546,8 +534,73 @@ class Parser {
                 prof.callback(profiles[i], prof);
         }
     }
+
 };
 
+
+template <std::size_t N>
+struct tag {};
+// 
+// template <std::size_t N>
+// constexpr std::size_t ret_template_arg(const tag<N>& _) { return N; }
+
+template <std::size_t N>
+constexpr std::size_t count_id(const std::array<static_profile, N>& arr) {
+    std::size_t count{0};
+    for(const auto& prof : arr) {
+        if(prof.lname) ++count;
+        if(prof.sname) ++count;
+    }
+    return count;
 }
 
+template <std::size_t N>
+constexpr std::size_t count_posarg(const std::array<static_profile, N>& arr) {
+    std::size_t count{0};
+    for(const auto& prof : arr) {
+        if(prof.lname) {
+            if((prof.lname[0] != '-') && !prof.sname) ++count;
+        }
+    }
+    return count;
+}
+
+using temp_pair = std::pair<const char*, const static_profile*>;
+
+template <std::size_t id_count, std::size_t N, std::size_t... Is>
+constexpr auto make_map(const std::array<static_profile, N>& profiles, tag<id_count>, std::index_sequence<Is...>) {
+    std::array<temp_pair, id_count> temp{};
+
+    std::size_t curr_temp_idx = 0;
+    for(const auto& prof : profiles) {
+        if(prof.lname) {
+            temp[curr_temp_idx] = {prof.lname, &prof};
+            ++curr_temp_idx;
+        }
+
+        if(prof.sname) {
+            temp[curr_temp_idx] = {prof.sname, &prof};
+            ++curr_temp_idx;
+        }
+    }
+
+    std::array<std::pair<frozen::string, const static_profile*>, id_count> profile_pairs = {{
+        {frozen::string(temp[Is].first), temp[Is].second}...
+    }};
+    return frozen::make_unordered_map<frozen::string, const static_profile*>(profile_pairs);
+}
+
+template <typename F, std::size_t N>
+consteval auto make_parser(F get_arr, const std::array<static_profile, N>& _) {
+    static_assert(
+        std::is_same_v<decltype(get_arr()), decltype(_)>,
+        "get_arr must be at least []() -> const auto& { return <constexpr std::array>; }"
+    );
+    constexpr auto& arr = get_arr();
+    constexpr auto id_count = count_id(arr);
+    auto map = make_map(arr, tag<id_count>{}, std::make_index_sequence<id_count>{});
+    return Parser<IDCount<id_count>, PosargCount<count_posarg(arr)>>(map, arr);
+}
+
+}
 }

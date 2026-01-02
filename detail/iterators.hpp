@@ -137,7 +137,7 @@ struct iterator_viewer {
         return *this;
     }
 
-    const T& operator[](std::size_t index) const noexcept { return beg[index]; }
+    constexpr const T& operator[](std::size_t index) const noexcept { return beg[index]; }
 
     constexpr inline void rewind() noexcept { iter = beg; }
     constexpr std::size_t count_iterated() const noexcept { return iter - beg; }
