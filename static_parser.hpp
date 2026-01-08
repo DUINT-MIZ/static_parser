@@ -3,10 +3,8 @@
 #include <functional>
 #include <frozen/unordered_map.h>
 #include <frozen/string.h>
-#include <iostream>
-#include <variant>
-#include <cstring>
 #include <charconv>
+#include <cstring>
 #include <type_traits>
 
 #include "detail/values.hpp"
@@ -200,7 +198,13 @@ class Parser {
         switch (mod_prof.value.get_value_tag())
         {
         case values::ValTag::VAR_REF :
-            convert(mod_prof.value.get_raw_ptr(), static_prof.convert_code, token);
+            if(token)
+                convert(mod_prof.value.get_raw_ptr(), static_prof.convert_code, token);
+            else
+                {
+                    convert(mod_prof.value.get_raw_ptr(), static_prof.convert_code, *input_iter);
+                    break;
+                };
             ++input_iter;
             break;
         
@@ -245,7 +249,7 @@ class Parser {
                 if(stopped_by_token_invalidation ||
                     stopped_by_full_value ||
                     input_iter.end_reached()
-                ) return;
+                ) break;
 
                 if(!static_prof.is_strict) {
                     to_parse = (unsigned)-1;
@@ -276,7 +280,7 @@ class Parser {
         modifiable_profile* mod_prof = nullptr;
         while(!argv_iter.end_reached()) {
             token = *argv_iter;
-            
+            std::cout << "handle opt loop\n";
             if(
                 (
                 (token[0] == '-') &&
@@ -284,6 +288,7 @@ class Parser {
                 ) || 
                 (token[0] != '-')
             ) {
+                std::cout << "Token : " << argv_iter.count_iterable() << std::endl;
                 if(dump.full()) {
                     throw parse_error(
                         "Dump full, you can't pass more than "
@@ -306,7 +311,7 @@ class Parser {
                 token = &token[equ_pos + 1];
             } else {
                 it = map.find(frozen::string(token));
-                ++argv_iter;
+                token = nullptr;
             }
 
             if(it == map.end()) {
@@ -335,13 +340,13 @@ class Parser {
             }
 
             if(mod_prof->times_called >= prof->permitted_call_count) {
-                throw parse_error(std::string("Permitted call_count reached, for ") + token);
+                throw parse_error(std::string("Permitted call_count reached, for ") + *argv_iter);
             }
 
             fetch<char*>(
                 aligning_data.arr[it->second - profiles.front()],
                 *(it->second),
-                argv_iter,
+                ++argv_iter,
                 token,
                 [](const char* token){ return (token[0] == '-'); }
             );
@@ -465,9 +470,7 @@ class Parser {
                         "Variable reference shouldn't be align with static_profile::narg != 1"
                     );
 
-            if(mod_prof.value.get_type_code() != it->second->convert_code) {
-                
-                        
+                    if(mod_prof.value.get_type_code() != it->second->convert_code) {
                 throw std::invalid_argument(
                     "Variable reference type code mismatch"
                 );
@@ -590,16 +593,11 @@ constexpr auto make_map(const std::array<static_profile, N>& profiles, tag<id_co
     return frozen::make_unordered_map<frozen::string, const static_profile*>(profile_pairs);
 }
 
-template <typename F, std::size_t N>
-consteval auto make_parser(F get_arr, const std::array<static_profile, N>& _) {
-    static_assert(
-        std::is_same_v<decltype(get_arr()), decltype(_)>,
-        "get_arr must be at least []() -> const auto& { return <constexpr std::array>; }"
-    );
-    constexpr auto& arr = get_arr();
-    constexpr auto id_count = count_id(arr);
+template <std::size_t N>
+consteval auto make_parser(const std::array<static_profile, N>& arr) {
+    constexpr std::size_t id_count = 3;
     auto map = make_map(arr, tag<id_count>{}, std::make_index_sequence<id_count>{});
-    return Parser<IDCount<id_count>, PosargCount<count_posarg(arr)>>(map, arr);
+    return Parser<IDCount<id_count>, PosargCount<0>>(map, arr);
 }
 
 }
