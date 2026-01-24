@@ -1,24 +1,9 @@
-
-#ifndef MIZ_PARSER_UTILS_HPP
-#define MIZ_PARSER_UTILS_HPP
-#include <cstdint>
+#pragma once
 #include <array>
-#include <stdexcept>
-#include <string>
+namespace sp {
+namespace utils {
 
-namespace parser {
-typedef unsigned int uint;
 
-class parse_error : public std::runtime_error {
-    public:
-    parse_error(const std::string& msg) : std::runtime_error(msg) {}
-};
-
-namespace behave {
-    constexpr uint IS_STRICT = 1 << 2;
-    constexpr uint IS_REQUIRED = 1 << 1;
-    constexpr uint IS_IMMEDIATE = 1 << 0;
-};
 
 constexpr std::array<bool, 256> identifier_make_table(){
     std::array<bool, 256> data {};
@@ -81,25 +66,5 @@ constexpr bool valid_posarg_name(const char* name)
     return true;
 }
 
-constexpr int find(const char* str, char c) {
-    int res = -1;
-    char c1 = '\0';
-    for(int i = 0; (c1 = str[i]) != '\0'; i++) {
-        if(c1 == c) { 
-            res = i;
-            break;
-        }
-    }
-    return res;
 }
-
-constexpr bool is_num(char c) { return (('0' <= c) && (c <= '9')); }
-
-constexpr std::size_t get_strlen(const char* str) {
-    std::size_t len = 0;
-    while((str++)[0] != 0) { ++len; }
-    return len;
 }
-
-}
-#endif
