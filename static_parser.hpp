@@ -45,6 +45,9 @@ make_map(const std::span<const profiles::static_profile>& profiles) {
         if(prof.sname) extracted[curr_idx++] = {prof.sname, &prof};
     }
 
+    if(curr_idx != IDCount) 
+        throw except::comtime_except("nullptr in name !");
+
     return 
     frozen::make_unordered_map<frozen::string, const profiles::static_profile*>(
         make_map_pairs(extracted, std::make_index_sequence<IDCount>{})

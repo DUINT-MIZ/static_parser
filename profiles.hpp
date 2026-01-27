@@ -118,6 +118,8 @@ struct ConstructingProfile {
     }
 
     constexpr const ConstructingProfile& profile() const noexcept { return *this; }
+    constexpr NameType short_name() const noexcept { return sname; }
+    constexpr NameType long_name() const noexcept { return lname; }
 };
 
 
@@ -130,12 +132,12 @@ struct BasicOption : protected ConstructingProfile {
     constexpr BasicOption() : ConstructingProfile() { this->is_posarg(false); }
 
     constexpr Derived& operator()(NameType name) {
-        this->identifier(name, nullptr);
+        this->identifier(name, this->short_name());
         return static_cast<Derived&>(*this);
     }
  
     constexpr Derived& operator[](NameType name) {
-        this->identifier(nullptr, name);
+        this->identifier(this->long_name(), name);
         return static_cast<Derived&>(*this);
     }
 
