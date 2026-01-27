@@ -192,7 +192,6 @@ class RuntimeMapper {
             profiles::modifiable_profile& mprof = mutable_profiles[i];
 
             if(mprof.bval.get_code() != values::TypeCode::ARRAY) {
-                std::cerr << "mprof.bval code is not ARRAY : " << values::code_to_str(mprof.bval.get_code()) << std::endl;
                 if(mprof.bval.get_code() != sprof.convert_code)    
                     throw std::invalid_argument("BoundValue variable reference type is incompatible with static_profile convert code");
                 

@@ -64,7 +64,7 @@ bool convert_and_insert(const FillF& fill, std::string_view input, values::TypeC
         {
             if(input[input.size()] != '\0')
                 throw except::ParseError(std::string("Token : ").append(input) + " Is not null-terminated");
-            std::cout << "Insert string : " << (void*)input.data() << std::endl;
+            
             const char* dat = input.data();
             return fill((void*)&dat, values::TypeCode::STRING);
         }
@@ -98,7 +98,7 @@ std::string_view fetch_and_next(
     if(!eq_value.empty()) {
         if(convert_and_insert(fill, eq_value, static_prof.convert_code)) --to_parse;
         curr_token = get();
-        std::cout << "curr_token : " << curr_token << std::endl;
+        
     } else {
         curr_token = get();
         bool ins_res;
@@ -214,13 +214,13 @@ void parse(
     auto dump_store = [&](const std::string_view& token) -> void {
         if(dump_i == dump_size)
             throw except::ParseError("Dump inputs exceed dump size");
-        std::cout << "Dump store !" << std::endl;
+        
         dump[dump_i++] = token;
     };
 
     auto dump_get = [&]() {
         if(dump_get_i == dump_i) return std::string_view{};
-        std::cout << "Dump get !" << std::endl;
+        
         return dump[dump_get_i++];
     };
 

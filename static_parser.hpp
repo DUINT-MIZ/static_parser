@@ -125,7 +125,7 @@ struct RuntimeContext {
         if(req.request.placement_index >= ProfCount)
             throw except::SetupError("Request placement index is out of bounds");
         mprofs[req.request.placement_index] = req.mprof;
-        std::cerr << "Request (" << req.request.name << ") placement index : " << req.request.placement_index << std::endl;
+        
     }
 
     template <IsRequest... Req>
@@ -135,7 +135,7 @@ struct RuntimeContext {
     )
     : mapper(smapper, mprofs)
     {
-        std::cerr << "Runtime context initialize (sizeof) : " << sizeof...(Req) << std::endl;
+        
         (apply_request(req), ...);
         mapper.verify();
     }
@@ -155,7 +155,7 @@ auto make_rcontext(
     Req&&... req
 ) {
     (set_request(ctx.get_index_func(), req), ...);
-    std::cerr << "rcontext make" << std::endl;
+    
     return RuntimeContext<ProfCount, IDCount>(ctx.mapper, std::forward<Req>(req)...);
 }
 
