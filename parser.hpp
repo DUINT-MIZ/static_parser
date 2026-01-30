@@ -6,7 +6,7 @@
 #include "mapper.hpp"
 #include "profiles.hpp"
 #include "exceptions.hpp"
-#include "values.hpp"
+#include "values_experiment.hpp"
 
 namespace sp {
 
@@ -33,45 +33,45 @@ void from_chars_result_check(const std::from_chars_result& res, std::string_view
 }
 
 template <typename FillF>
-bool convert_and_insert(const FillF& fill, std::string_view input, values::TypeCode code) {
+bool convert_and_insert(const FillF& fill, std::string_view input, values::type_code::Tcode code) {
     if(input.empty())
         throw except::ParseError("convert-insert operation failed, input token is empty");
     
     switch(code) {
-        case values::TypeCode::DOUBLE :
+        case values::type_code::kDob.value() :
             {
                 DobT buff = 0;
                 from_chars_result_check(
                     std::from_chars(input.data(), input.data() + input.size(), buff),
                     input
                 );
-                return fill((void*)&buff, values::TypeCode::DOUBLE);
+                return fill((void*)&buff, codeDob);
             }
             break;
 
-        case values::TypeCode::INT :
+        case codeInt.value() :
             {
                 IntT buff = 0;
                 from_chars_result_check(
                     std::from_chars(input.data(), input.data() + input.size(), buff),
                     input
                 );
-                return fill((void*)&buff, values::TypeCode::INT);
+                return fill((void*)&buff, codeInt);
             }
             break;
 
-        case values::TypeCode::STRING : 
+        case codeStr.value() : 
         {
             if(input[input.size()] != '\0')
                 throw except::ParseError(std::string("Token : ").append(input) + " Is not null-terminated");
             
             const char* dat = input.data();
-            return fill((void*)&dat, values::TypeCode::STRING);
+            return fill((void*)&dat, codeStr);
         }
             break;
 
         default :
-            throw except::ParseError(std::string("Unknown type code of ") + code_to_str(code));
+            throw except::ParseError(std::string("Unknown type code of ") + values::type_code::code_to_str(code));
         
     }
 }

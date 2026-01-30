@@ -1,6 +1,6 @@
 #pragma once
 #include "exceptions.hpp"
-#include "values.hpp"
+#include "values_experiment.hpp"
 #include "utils.hpp"
 #include "commons.hpp"
 #include <cstdint>
@@ -21,7 +21,6 @@ constexpr bool is_required(FlagType flag) { return ((flag & kRequired) != 0); }
 constexpr bool is_restricted(FlagType flag) { return ((flag & kRestricted) != 0); }
 constexpr bool is_immediate(FlagType flag) { return ((flag & kImmediate) != 0); }
 
-
 struct static_profile;
 
 struct ConstructingProfile {
@@ -33,7 +32,7 @@ struct ConstructingProfile {
     NumT exclude_point = -1;
     WholeNumT call_limit = 1;
     FlagType behave = 0;
-    values::TypeCode convert_code = values::TypeCode::NONE;
+    TypeCodeT convert_code = 0;
     bool posarg = false;
 
     constexpr void verify() const {
@@ -58,13 +57,13 @@ struct ConstructingProfile {
                 throw except::comtime_except("Invalid short option name format");
         }
 
-        if(!narg and (convert_code != values::TypeCode::NONE))
+        if(!narg and (!convert_code.none()))
             throw except::comtime_except("No narg specified shouldn't have a non-NONE convert_code");
-        else if (narg and (convert_code == values::TypeCode::NONE))
+        else if (narg and (convert_code.none()))
             throw except::comtime_except("narg are specified, convert_code shouldn't be NONE");
 
 
-        if(convert_code == values::TypeCode::ARRAY)
+        if(values::is_arr_ctgry(convert_code))
             throw except::comtime_except("Typecode ARRAY doesn't specify any type to convert");
 
         if(!call_limit)
@@ -87,7 +86,7 @@ struct ConstructingProfile {
         return *this;
     }
 
-    constexpr ConstructingProfile& convert_to(values::TypeCode code) {
+    constexpr ConstructingProfile& convert_to(const TypeCodeT& code) {
         convert_code = code;
         return *this;
     }
@@ -166,7 +165,7 @@ struct BasicOption : protected ConstructingProfile {
         return static_cast<Derived&>(*this);
     }
 
-    constexpr Derived& convert(values::TypeCode code) noexcept {
+    constexpr Derived& convert(const TypeCodeT& code) noexcept {
         this->convert_to(code);
         return static_cast<Derived&>(*this);
     }
@@ -206,7 +205,7 @@ struct BasicPosarg : protected ConstructingProfile {
         return static_cast<Derived&>(*this);
     }
 
-    constexpr Derived& convert(values::TypeCode code) noexcept{
+    constexpr Derived& convert(const TypeCodeT& code) noexcept{
         this->convert_to(code);
         return static_cast<Derived&>(*this);
     }
@@ -268,7 +267,7 @@ struct static_profile {
     const NumT positional_order = 0;
     const FlagType behave = 0;
     const NumT exclude_point = -1;
-    const values::TypeCode convert_code = values::TypeCode::NONE;
+    const TypeCodeT convert_code = 0;
     const bool is_posarg = false;
 
     static_profile() = delete;
@@ -303,7 +302,6 @@ struct modifiable_profile {
     WholeNumT call_frequent() const noexcept { return call_count; }
     template <typename T>
     modifiable_profile& bind(T& var) { bval.bind(var); return *this; }
-    modifiable_profile& bind(const values::pointing_arr& arr) { bval.bind(arr); return *this; }
     modifiable_profile& set_callback(FunctionType&& func) { callback = func; return *this; }
 };
 

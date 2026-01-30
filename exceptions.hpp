@@ -8,7 +8,20 @@ namespace sp {
 
 namespace except {
 
+/*
+Appropriate use of these exceptions
 
+use comtime_except if a function or procedure is likely
+evaluated at compile-time
+
+use ParseError if a function or procedure is likely
+evaluated when sp::parse invoked
+
+use SetupError if a function or procedure is likely
+evaluated when boilerplate is evaluated
+
+use standard exception for helpers, etc.
+*/
 
 class raw_string_exception : public std::exception {
     private :
