@@ -67,7 +67,7 @@ struct PosargIndex {
 };
 
 template <std::size_t IDCount>
-class Mapper {
+class StaticMapper {
     private :
     using MapType = frozen::unordered_map<frozen::string, const profiles::static_profile*, IDCount>;
     
@@ -83,7 +83,7 @@ class Mapper {
     constexpr auto get_ptable_posarg(const std::array<const profiles::static_profile*, N>& arr)
     {
         if constexpr  (N == 0) { 
-            return {};
+            return std::span<const profiles::static_profile* const>{};
         } else {
             return std::span<const profiles::static_profile* const>(arr);
         }
@@ -95,7 +95,7 @@ class Mapper {
     const std::span<const profiles::static_profile* const> posargs;
 
     template <std::size_t ProfCount, std::size_t PosargCount>
-    constexpr Mapper(
+    constexpr StaticMapper(
         const MapType& new_map,
         const ProfileTable<ProfCount, PosargCount>& ptable
     ) : map(new_map), profiles(ptable.static_profiles), posargs(get_ptable_posarg(ptable.get_posargs()))
@@ -146,10 +146,10 @@ class RuntimeMapper {
     std::span<profiles::modifiable_profile> mutable_profiles;
     bool is_verified = false;
     public :
-    const Mapper<IDCount>& mapper; // const reference in case mapper is compile-time evaluated object
+    const StaticMapper<IDCount>& mapper; // const reference in case mapper is compile-time evaluated object
 
     RuntimeMapper(
-        const Mapper<IDCount>& new_mapper,
+        const StaticMapper<IDCount>& new_mapper,
         const std::span<profiles::modifiable_profile> new_mutable_profiles
     ) : mutable_profiles(new_mutable_profiles), mapper(new_mapper) 
     {}

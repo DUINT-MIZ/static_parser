@@ -251,11 +251,11 @@ struct Posarg : public BasicPosarg<Posarg> {
 };
 
 
-template <typename T>
+template <typename T, typename U = std::decay_t<T>>
 concept DenotedProfile = 
-    (std::derived_from<T, BasicOption<T>> || std::derived_from<T, BasicPosarg<T>>) &&
+    (std::derived_from<U, BasicOption<U>> || std::derived_from<U, BasicPosarg<U>>) &&
     requires() {
-        {T::id_count} -> std::convertible_to<int>;
+        {U::id_count} -> std::convertible_to<int>;
 };
 
 struct static_profile {

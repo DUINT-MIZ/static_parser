@@ -45,7 +45,7 @@ bool convert_and_insert(const FillF& fill, std::string_view input, values::type_
                     std::from_chars(input.data(), input.data() + input.size(), buff),
                     input
                 );
-                return fill((void*)&buff, codeDob);
+                return fill(buff);
             }
             break;
 
@@ -56,7 +56,7 @@ bool convert_and_insert(const FillF& fill, std::string_view input, values::type_
                     std::from_chars(input.data(), input.data() + input.size(), buff),
                     input
                 );
-                return fill((void*)&buff, codeInt);
+                return fill(buff);
             }
             break;
 
@@ -64,9 +64,7 @@ bool convert_and_insert(const FillF& fill, std::string_view input, values::type_
         {
             if(input[input.size()] != '\0')
                 throw except::ParseError(std::string("Token : ").append(input) + " Is not null-terminated");
-            
-            const char* dat = input.data();
-            return fill((void*)&dat, codeStr);
+            return fill(input.data());
         }
             break;
 
