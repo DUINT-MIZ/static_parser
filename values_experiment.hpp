@@ -2,7 +2,6 @@
 
 #include <variant>
 #include <type_traits>
-#include <functional>
 #include <bit>
 #include <cstdint>
 
@@ -68,13 +67,13 @@ constexpr bool is_ref_ctgry(const type_code::Tcode& code) noexcept {
 }
 
 template <typename T, typename... Ts>
-struct assignable_within_variant {
+struct constructible_within_variant {
 	static constexpr bool value = false;
 };
 
 template <typename T, typename... Ts>
-struct assignable_within_variant<T, std::variant<Ts...>> {
-	static constexpr bool value = std::disjunction<std::is_assignable<Ts&, T&>...>::value;
+struct constructible_within_variant<T, std::variant<Ts...>> {
+	static constexpr bool value = std::disjunction<std::is_constructible<Ts, T&>...>::value;
 };
 
 struct TrackingSpan {
@@ -103,22 +102,29 @@ struct TrackingSpan {
 };
 
 template <typename T>
-struct TrackingReference : public std::reference_wrapper<T> {
+struct TrackingReference {
 	bool filled = false;
-	using std::reference_wrapper<T>::get;
+	std::reference_wrapper<T> ref;
 	
+	TrackingReference(T& var) : ref(var) {}
+
+	TrackingReference& operator=(T& var) {
+		filled = false;
+		ref = var;
+		return *this;
+	}
 
 	bool push_back(const T& val) {
 		if(filled)
 			return false;
-		this->get() = val;
+		this->ref.get() = val;
 		return (filled = true);
 	}
 
 	bool push_back(T&& val) {
 		if(filled)
 			return false;
-		this->get() = std::move(val);
+		this->ref.get() = std::move(val);
 		return (filled = true);
 	}
 
@@ -148,8 +154,6 @@ GetType& ce_get(VariantType& ins, std::string_view error_msg) {  // Custom Error
 class BoundValue {
 	private :
 
-	using ConsumeF = std::function<bool(void* val, type_code::Tcode)>;
-
 	using val_type = std::variant<
 		std::monostate,
 		IntRef,
@@ -177,18 +181,18 @@ class BoundValue {
 		return [this](auto&& var) {
 			std::visit([&var](auto&& data) {
 				using T = std::decay_t<decltype(data)>;
-				if constexpr (std::is_same_v<T, std::monostate>) {
+				if constexpr (std::is_same_v<T, std::monostate>)
 					return false;
-				} else
-					data.push_back(var);
+				else
+					return data.push_back(var);
 				
 			}, this->value);
 		};
 	}
 
 	template <typename T>
-	typename std::enable_if_t<assignable_within_variant<T, val_type>::value, void>
-	bind(T& ref) { this->value = std::ref(ref); }
+	typename std::enable_if_t<constructible_within_variant<T, val_type>::value, void>
+	bind(T& ref) { this->value = ref; }
 
 	std::size_t consume_amnt() const noexcept {
 		return std::visit([](auto&& arg) -> std::size_t {

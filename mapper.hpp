@@ -191,14 +191,14 @@ class RuntimeMapper {
             const profiles::static_profile& sprof = *mapper[i];
             profiles::modifiable_profile& mprof = mutable_profiles[i];
 
-            if(mprof.bval.get_code().none()) {
-                if(mprof.bval.get_code() != sprof.convert_code)    
+            if(values::is_ref_ctgry(mprof.bval.get_code())) {
+                if(mprof.bval.get_code() != sprof.convert_code)
                     throw std::invalid_argument("BoundValue variable reference type is incompatible with static_profile convert code");
                 
                 if(sprof.narg > 1)
                     throw std::invalid_argument("static_profile narg more than 1 is incompatible with variable reference BoundValue");
             } else {
-                if(mprof.bval.get_value<values::pointing_arr>().viewer.size() < sprof.narg)
+                if(mprof.bval.consume_amnt() < sprof.narg)
                     throw std::invalid_argument("BoundValue array size is less than static_profile narg");
             }
         }
