@@ -37,7 +37,7 @@ bool convert_and_insert(const FillF& fill, std::string_view input, values::type_
     if(input.empty())
         throw except::ParseError("convert-insert operation failed, input token is empty");
     
-    switch(code) {
+    switch(code.value()) {
         case values::type_code::kDob.value() :
             {
                 DobT buff = 0;

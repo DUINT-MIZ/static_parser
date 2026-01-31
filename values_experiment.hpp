@@ -28,6 +28,7 @@ namespace type_code {
 
 	constexpr Tcode ref_category(0b1 << 0);
 	constexpr Tcode arr_category(0b1 << 1);
+	constexpr Tcode none = Tcode();
 	constexpr Tcode category_fields(0b1111);
 	constexpr int field_size = std::popcount(category_fields.value());
 
@@ -80,6 +81,14 @@ struct TrackingSpan {
 	ArrT viewer;
 	std::size_t curr_idx = 0;
 	TrackingSpan(const ArrT& view) : viewer(view) {}
+	TrackingSpan& operator=(const ArrT& view) {
+		viewer = view;
+		this->track_reset();
+		return *this;
+	}
+	template <std::size_t N>
+	TrackingSpan(std::array<Blob, N>& arr) : viewer(arr) {}
+
 	template <typename T>
 	bool push_back(const T& val) {
 		if(curr_idx >= viewer.size())
@@ -110,7 +119,7 @@ struct TrackingReference {
 
 	TrackingReference& operator=(T& var) {
 		filled = false;
-		ref = var;
+		this->track_reset();
 		return *this;
 	}
 
@@ -179,7 +188,7 @@ class BoundValue {
 	auto opc() { // open parsing context
 		this->reset();
 		return [this](auto&& var) {
-			std::visit([&var](auto&& data) {
+			return std::visit([&var](auto&& data) {
 				using T = std::decay_t<decltype(data)>;
 				if constexpr (std::is_same_v<T, std::monostate>)
 					return false;
