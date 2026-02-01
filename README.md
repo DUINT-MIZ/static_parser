@@ -1,10 +1,12 @@
 # static_parser
 A Command Line Parser that evaluate most of it's required data in compile-time.
-No build step required, simply add the headers to your include path
+No build step required, simply add the headers to your include path.
+Inspired by serge-sans-paille/frozen
+
 
 **Compiler used : g++** <br>
 **Version Required : c++20** <br>
-
+**Dependencies : serge-sans-paille/frozen** <br>
 
 
 Usage example :
@@ -34,9 +36,6 @@ for this option/posarg.
 use .restricted() to prevent fetching argument
 more than specified NArgs
 */
-
-
-
 
 // Callback function signature is void(sp::StProf, sp::ModProf&)
 void help_msg(sp::StProf _, sp::ModProf& __) {
