@@ -300,8 +300,7 @@ struct modifiable_profile {
     FunctionType callback = [](static_profile, modifiable_profile&){};
     values::BoundValue bval;
     WholeNumT call_frequent() const noexcept { return call_count; }
-    template <typename T>
-    modifiable_profile& bind(T& var) { bval.bind(var); return *this; }
+    modifiable_profile& bind(auto var) { bval.bind(var); return *this; }
     modifiable_profile& set_callback(FunctionType&& func) { callback = func; return *this; }
 };
 

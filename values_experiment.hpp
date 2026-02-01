@@ -68,13 +68,13 @@ constexpr bool is_ref_ctgry(const type_code::Tcode& code) noexcept {
 }
 
 template <typename T, typename... Ts>
-struct constructible_within_variant {
+struct within_variant {
 	static constexpr bool value = false;
 };
 
 template <typename T, typename... Ts>
-struct constructible_within_variant<T, std::variant<Ts...>> {
-	static constexpr bool value = std::disjunction<std::is_constructible<Ts, T&>...>::value;
+struct within_variant<T, std::variant<Ts...>> {
+	static constexpr bool value = std::disjunction<std::is_same<Ts, T>...>::value;
 };
 
 struct TrackingSpan {
@@ -200,8 +200,8 @@ class BoundValue {
 	}
 
 	template <typename T>
-	typename std::enable_if_t<constructible_within_variant<T, val_type>::value, void>
-	bind(T& ref) { this->value = ref; }
+	typename std::enable_if_t<within_variant<std::decay_t<T>, val_type>::value, void>
+	bind(T ref) { this->value = ref; }
 
 	std::size_t consume_amnt() const noexcept {
 		return std::visit([](auto&& arg) -> std::size_t {
@@ -228,11 +228,9 @@ class BoundValue {
 };
 
 }
-
 using TypeCodeT = values::type_code::Tcode;
-const TypeCodeT& codeStr = values::type_code::kStr;
-const TypeCodeT& codeInt = values::type_code::kInt;
-const TypeCodeT& codeDob = values::type_code::kDob;
-const TypeCodeT& codeArr = values::type_code::kRangedArr;
-
+const TypeCodeT& kCodeNone = values::type_code::none;
+const TypeCodeT& kCodeInt = values::type_code::kInt;
+const TypeCodeT& kCodeDob = values::type_code::kDob;
+const TypeCodeT& kCodeStr = values::type_code::kStr;
 }
