@@ -38,7 +38,7 @@ bool convert_and_insert(const FillF& fill, std::string_view input, values::type_
         throw except::ParseError("convert-insert operation failed, input token is empty");
     
     switch(code.value()) {
-        case values::type_code::kDob.value() :
+        case kCodeDob.value() :
             {
                 DobT buff = 0;
                 from_chars_result_check(
@@ -49,7 +49,7 @@ bool convert_and_insert(const FillF& fill, std::string_view input, values::type_
             }
             break;
 
-        case codeInt.value() :
+        case kCodeInt.value() :
             {
                 IntT buff = 0;
                 from_chars_result_check(
@@ -60,7 +60,7 @@ bool convert_and_insert(const FillF& fill, std::string_view input, values::type_
             }
             break;
 
-        case codeStr.value() : 
+        case kCodeStr.value() : 
         {
             if(input[input.size()] != '\0')
                 throw except::ParseError(std::string("Token : ").append(input) + " Is not null-terminated");

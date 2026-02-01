@@ -19,11 +19,11 @@ using ModProf = sp::profiles::modifiable_profile;
 using StProf = sp::profiles::static_profile;
 using snOpt = sp::profiles::snOption;
 using dnOpt = sp::profiles::dnOption;
-const TypeCodeT& kCodeNone = values::type_code::none;
-const TypeCodeT& kCodeInt = values::type_code::kInt;
-const TypeCodeT& kCodeDob = values::type_code::kDob;
-const TypeCodeT& kCodeStr = values::type_code::kStr;
 using Posarg = sp::profiles::Posarg;
+using IntRef = values::IntRef;
+using DobRef = values::DobRef;
+using StrRef = values::StrRef;
+using TrackSpan = values::TrackingSpan;
 
 template <profiles::DenotedProfile... Prof>
 constexpr std::size_t count_id() {
