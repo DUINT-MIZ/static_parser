@@ -1,6 +1,6 @@
 #pragma once
 #include "exceptions.hpp"
-#include "values_experiment.hpp"
+#include "values.hpp"
 #include "utils.hpp"
 #include "commons.hpp"
 #include <cstdint>
@@ -27,6 +27,7 @@ struct ConstructingProfile {
     private :
     NameType lname = nullptr;
     NameType sname = nullptr;
+    NameType desc = "No Desc";
     WholeNumT narg = 0;
     NumT positional_order = 0; 
     NumT exclude_point = -1;
@@ -113,6 +114,11 @@ struct ConstructingProfile {
     
     constexpr ConstructingProfile& exclude_on(NumT pos) {
         exclude_point = pos;
+        return *this;
+    }
+
+    constexpr ConstructingProfile& description(NameType des) {
+        desc = des;
         return *this;
     }
 
@@ -262,6 +268,7 @@ struct static_profile {
     public :
     const NameType lname = nullptr;
     const NameType sname = nullptr;
+    const NameType desc = "";
     const WholeNumT call_limit = 1;
     const WholeNumT narg = 0;
     const NumT positional_order = 0;
@@ -274,7 +281,8 @@ struct static_profile {
     constexpr static_profile(const ConstructingProfile& construct_prof)
     :   
         lname(construct_prof.lname),
-        sname(construct_prof.sname),  
+        sname(construct_prof.sname),
+        desc(construct_prof.desc),
         call_limit(construct_prof.call_limit),
         narg(construct_prof.narg),
         positional_order(construct_prof.positional_order),
@@ -292,11 +300,7 @@ struct modifiable_profile {
     bool is_called = false;
     WholeNumT call_count = 0;
     WholeNumT fulfilled_args = 0;
-    #ifdef STATIC_PARSER_NO_HEAP
-    using FunctionType = void(*)(static_profile, modifiable_profile&);
-    #else
     using FunctionType = std::function<void(static_profile, modifiable_profile&)>;
-    #endif
     FunctionType callback = [](static_profile, modifiable_profile&){};
     values::BoundValue bval;
     WholeNumT call_frequent() const noexcept { return call_count; }

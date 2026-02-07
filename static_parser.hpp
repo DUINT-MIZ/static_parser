@@ -5,7 +5,7 @@
 #include "exceptions.hpp"
 
 #include "utils.hpp"
-#include "values_experiment.hpp"
+#include "values.hpp"
 #include "profiles.hpp"
 #include "mapper.hpp"
 #include "parser.hpp"
@@ -115,9 +115,9 @@ struct RuntimeContext {
             static const profiles::static_profile* ptr = nullptr;
             static std::size_t idx = 0;
             if(!(ptr = smapper[request.name_request]))
-                throw except::SetupError(request.name_request + std::string(" is not registered in StaticMapper"));
+                throw except::SetupError(request.name_request + std::string(" is not registered in StaticMapper [RuntimeContext ctor]"));
             if((idx = smapper.profile_index(ptr)) >= ProfCount)
-                throw except::SetupError(std::to_string(idx) + " Index is out of bounds");
+                throw except::SetupError(std::to_string(idx) + " Index is out of bounds [RuntimeContext ctor]");
             mprofs[idx] = std::move(request.mprof);
         };
 
@@ -131,5 +131,4 @@ RuntimeContext<IDCount, ProfCount>
 make_rctx(const StaticContext<IDCount, ProfCount, PosargCount>& sctx, Req&&... req) {
     return RuntimeContext<IDCount, ProfCount>(sctx.smapper, std::forward<Req>(req)...);
 }
-
 }
